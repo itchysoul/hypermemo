@@ -7,7 +7,9 @@ import {
   removeOptionalSections,
   stripOptionalMarkers,
   parseVerses,
-  getWordIndicesForVerse
+  getWordIndicesForVerse,
+  hasOptionalSections,
+  parseContentWithOptional
 } from './utils/parsing'
 import {
   selectWordsToDelete,
@@ -24,6 +26,7 @@ import {
   INTERVALS,
   COMPLETIONS_FOR_REVIEW
 } from './utils/spacedRepetition'
+import { FONT_FAMILIES, FONT_SIZES, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE } from './utils/fontConfig'
 import { ClozeWord } from './components/ClozeWord'
 import { PassageSelector } from './components/PassageSelector'
 
@@ -40,6 +43,9 @@ function App() {
   const [selectedPassageId, setSelectedPassageId] = useState(1)
   const [showPassageSelector, setShowPassageSelector] = useState(false)
   const [includeOptional, setIncludeOptional] = useState(true)
+  const [optionalExpanded, setOptionalExpanded] = useState(false)
+  const [fontFamily, setFontFamily] = useState(DEFAULT_FONT_FAMILY)
+  const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE)
   
   const [text, setText] = useState(null)
   const [deletionPercentage, setDeletionPercentage] = useState(PERCENTAGE_STEP)
@@ -67,16 +73,20 @@ function App() {
     return PASSAGES.find(p => p.id === selectedPassageId) || PASSAGES[0]
   }, [selectedPassageId])
 
+  const passageHasOptional = useMemo(() => {
+    return selectedPassage ? hasOptionalSections(selectedPassage.content) : false
+  }, [selectedPassage])
+
   const processedContent = useMemo(() => {
     if (!selectedPassage) return ''
     let content = selectedPassage.content
-    if (!includeOptional) {
+    if (!includeOptional && !optionalExpanded) {
       content = removeOptionalSections(content)
     } else {
       content = stripOptionalMarkers(content)
     }
     return content
-  }, [selectedPassage, includeOptional])
+  }, [selectedPassage, includeOptional, optionalExpanded])
 
   const tokens = useMemo(() => {
     if (!processedContent) return []
@@ -187,6 +197,24 @@ function App() {
           setVerseProgress({})
           setVerseMode(false)
         }
+
+        const { data: settingsData } = await supabase
+          .from('user_passage_settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('passage_id', selectedPassageId)
+          .single()
+        
+        if (settingsData) {
+          setFontFamily(settingsData.font_family || DEFAULT_FONT_FAMILY)
+          setFontSize(settingsData.font_size || DEFAULT_FONT_SIZE)
+          setIncludeOptional(settingsData.include_optional !== false)
+        } else {
+          setFontFamily(DEFAULT_FONT_FAMILY)
+          setFontSize(DEFAULT_FONT_SIZE)
+          setIncludeOptional(true)
+        }
+        setOptionalExpanded(false)
       } catch (err) {
         console.error('Failed to load data:', err)
       } finally {
@@ -225,6 +253,28 @@ function App() {
       setDeletedIndices(indices)
     }
   }, [tokens, totalWords])
+
+  useEffect(() => {
+    if (!user || loading) return
+    
+    const saveTimeout = setTimeout(async () => {
+      try {
+        await supabase
+          .from('user_passage_settings')
+          .upsert({
+            user_id: user.id,
+            passage_id: selectedPassageId,
+            font_family: fontFamily,
+            font_size: fontSize,
+            include_optional: includeOptional
+          }, { onConflict: 'user_id,passage_id' })
+      } catch (err) {
+        console.error('Failed to save settings:', err)
+      }
+    }, 500)
+    
+    return () => clearTimeout(saveTimeout)
+  }, [user, loading, selectedPassageId, fontFamily, fontSize, includeOptional])
 
   const handleHarder = () => {
     const newPercentage = Math.min(100, deletionPercentage + PERCENTAGE_STEP)
@@ -696,7 +746,7 @@ function App() {
             )}
           </div>
           
-          {selectedPassage?.content?.includes('[OPTIONAL]') && (
+          {passageHasOptional && (
             <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -704,6 +754,7 @@ function App() {
                   checked={includeOptional}
                   onChange={(e) => {
                     setIncludeOptional(e.target.checked)
+                    setOptionalExpanded(false)
                     setDeletedIndices([])
                   }}
                   className="w-5 h-5 rounded"
@@ -711,10 +762,37 @@ function App() {
                 <span className="text-sm font-medium text-gray-700">Include Optional Sections</span>
               </label>
               <span className="text-xs text-gray-500">
-                {includeOptional ? 'Showing full passage' : 'Optional sections hidden'}
+                {includeOptional ? 'Showing full passage' : (optionalExpanded ? 'Viewing optional (click ⋯ to hide)' : 'Click ⋯ in text to view')}
               </span>
             </div>
           )}
+          
+          <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">Font:</label>
+              <select
+                value={fontFamily}
+                onChange={(e) => setFontFamily(e.target.value)}
+                className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {FONT_FAMILIES.map(f => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">Size:</label>
+              <select
+                value={fontSize}
+                onChange={(e) => setFontSize(parseInt(e.target.value))}
+                className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {FONT_SIZES.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
           
           <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -847,30 +925,83 @@ function App() {
         <div className="bg-white rounded-lg shadow-md p-6">
           <div 
             ref={textContainerRef}
-            className="text-lg leading-relaxed whitespace-pre-wrap"
+            className="leading-relaxed whitespace-pre-wrap"
+            style={{ fontFamily, fontSize: `${fontSize}px` }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
-            {tokens.map((token, idx) => {
-              if (token.type === 'word') {
-                const isDeletedByPercentage = deletedIndices.includes(token.wordIndex)
-                const isDeletedByVerse = verseMode && isWordInCurrentVerse(token.wordIndex)
-                const isDeleted = verseMode ? isDeletedByVerse : isDeletedByPercentage
-                return (
-                  <ClozeWord
-                    key={idx}
-                    word={token.value}
-                    isDeleted={isDeleted}
-                    showAll={showAll}
-                    isRevealed={isWordRevealed(token.wordIndex)}
-                    wordRef={(el) => {
-                      if (el) wordRefsMap.current.set(token.wordIndex, el)
-                    }}
-                  />
-                )
-              }
-              return <span key={idx}>{token.value}</span>
-            })}
+            {!includeOptional && passageHasOptional && !optionalExpanded ? (
+              <>
+                {(() => {
+                  const parts = parseContentWithOptional(selectedPassage.content)
+                  return parts.map((part, partIdx) => {
+                    if (part.optional) {
+                      return (
+                        <button
+                          key={`opt-${partIdx}`}
+                          onClick={() => setOptionalExpanded(true)}
+                          className="inline-block px-2 py-1 mx-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded cursor-pointer transition-colors"
+                          title="Click to view optional section"
+                          style={{ fontSize: `${fontSize}px` }}
+                        >
+                          ⋯
+                        </button>
+                      )
+                    }
+                    const partTokens = parseTextIntoTokens(part.content)
+                    return partTokens.map((token, idx) => {
+                      if (token.type === 'word') {
+                        const isDeletedByPercentage = deletedIndices.includes(token.wordIndex)
+                        const isDeletedByVerse = verseMode && isWordInCurrentVerse(token.wordIndex)
+                        const isDeleted = verseMode ? isDeletedByVerse : isDeletedByPercentage
+                        return (
+                          <ClozeWord
+                            key={`${partIdx}-${idx}`}
+                            word={token.value}
+                            isDeleted={isDeleted}
+                            showAll={showAll}
+                            isRevealed={isWordRevealed(token.wordIndex)}
+                            wordRef={(el) => {
+                              if (el) wordRefsMap.current.set(token.wordIndex, el)
+                            }}
+                          />
+                        )
+                      }
+                      return <span key={`${partIdx}-${idx}`}>{token.value}</span>
+                    })
+                  })
+                })()}
+              </>
+            ) : (
+              tokens.map((token, idx) => {
+                if (token.type === 'word') {
+                  const isDeletedByPercentage = deletedIndices.includes(token.wordIndex)
+                  const isDeletedByVerse = verseMode && isWordInCurrentVerse(token.wordIndex)
+                  const isDeleted = verseMode ? isDeletedByVerse : isDeletedByPercentage
+                  return (
+                    <ClozeWord
+                      key={idx}
+                      word={token.value}
+                      isDeleted={isDeleted}
+                      showAll={showAll}
+                      isRevealed={isWordRevealed(token.wordIndex)}
+                      wordRef={(el) => {
+                        if (el) wordRefsMap.current.set(token.wordIndex, el)
+                      }}
+                    />
+                  )
+                }
+                return <span key={idx}>{token.value}</span>
+              })
+            )}
+            {!includeOptional && optionalExpanded && passageHasOptional && (
+              <button
+                onClick={() => setOptionalExpanded(false)}
+                className="block mt-4 px-3 py-1 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              >
+                Hide optional sections
+              </button>
+            )}
           </div>
         </div>
       </div>
