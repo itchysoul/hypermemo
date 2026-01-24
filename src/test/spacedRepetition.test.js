@@ -1,26 +1,5 @@
 import { describe, it, expect } from 'vitest'
-
-function getNextInterval(quality, currentInterval) {
-  const baseIntervals = [0, 60000, 120000, 300000, 600000, 1200000, 1800000]
-  let intervalIndex = baseIntervals.findIndex(i => i >= currentInterval)
-  if (intervalIndex === -1) intervalIndex = baseIntervals.length - 1
-  
-  if (quality === 'again') {
-    return 60000
-  } else if (quality === 'hard') {
-    return baseIntervals[Math.max(0, intervalIndex)]
-  } else {
-    return baseIntervals[Math.min(baseIntervals.length - 1, intervalIndex + 1)]
-  }
-}
-
-function formatTimeUntil(ms) {
-  if (ms <= 0) return 'now'
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`
-  return `${seconds}s`
-}
+import { getNextInterval, formatTimeUntil, isVerseDue } from '../utils/spacedRepetition'
 
 describe('getNextInterval', () => {
   it('returns 60000ms (1 min) for "again" regardless of current interval', () => {

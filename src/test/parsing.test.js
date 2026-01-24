@@ -1,89 +1,10 @@
 import { describe, it, expect } from 'vitest'
-
-function parseTextIntoTokens(text) {
-  const tokens = []
-  const regex = /([a-zA-Z]+(?:'[a-zA-Z]+)?)|([^a-zA-Z]+)/g
-  let match
-  let wordIndex = 0
-  
-  while ((match = regex.exec(text)) !== null) {
-    if (match[1]) {
-      tokens.push({ type: 'word', value: match[1], wordIndex: wordIndex++ })
-    } else {
-      tokens.push({ type: 'other', value: match[2] })
-    }
-  }
-  
-  return tokens
-}
-
-function removeOptionalSections(text) {
-  return text.replace(/\[OPTIONAL\][\s\S]*?\[\/OPTIONAL\]/g, '')
-}
-
-function parseCouplets(text) {
-  const lines = text.split('\n').filter(line => {
-    const trimmed = line.trim()
-    return trimmed && !trimmed.match(/^[A-Z].*Act \d+.*Scene \d+/) && trimmed !== '[OPTIONAL]' && trimmed !== '[/OPTIONAL]'
-  })
-  
-  const couplets = []
-  let coupletNum = 1
-  let titleHandled = false
-  
-  for (let i = 0; i < lines.length; i += 2) {
-    const line1 = lines[i]
-    const line2 = lines[i + 1] || ''
-    
-    if (!titleHandled && i === 0) {
-      titleHandled = true
-      if (line1.match(/^[A-Z].*\d+/)) {
-        couplets.push({ number: 0, content: line1, isTitle: true })
-        i--
-        continue
-      }
-    }
-    
-    const content = line2 ? `${line1}\n${line2}` : line1
-    couplets.push({ number: coupletNum++, content, isCouplet: true })
-  }
-  
-  return couplets
-}
-
-function parseVerses(text, passageType = 'scripture') {
-  if (passageType === 'poetry') {
-    return parseCouplets(text)
-  }
-  
-  const lines = text.split('\n')
-  const verses = []
-  let currentVerse = null
-  let currentContent = []
-  
-  for (const line of lines) {
-    const verseMatch = line.match(/^(\d+)\s/)
-    if (verseMatch) {
-      if (currentVerse !== null) {
-        verses.push({ number: currentVerse, content: currentContent.join('\n') })
-      }
-      currentVerse = parseInt(verseMatch[1])
-      currentContent = [line]
-    } else if (currentVerse !== null) {
-      currentContent.push(line)
-    } else {
-      if (verses.length === 0 && line.trim()) {
-        verses.push({ number: 0, content: line, isTitle: true })
-      }
-    }
-  }
-  
-  if (currentVerse !== null) {
-    verses.push({ number: currentVerse, content: currentContent.join('\n') })
-  }
-  
-  return verses
-}
+import {
+  parseTextIntoTokens,
+  removeOptionalSections,
+  parseCouplets,
+  parseVerses
+} from '../utils/parsing'
 
 describe('parseTextIntoTokens', () => {
   it('parses simple text into word and other tokens', () => {

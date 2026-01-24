@@ -2,211 +2,30 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import './index.css'
 import { supabase } from './supabaseClient'
 import { PASSAGES } from './passages'
-
-function parseTextIntoTokens(text) {
-  const tokens = []
-  const regex = /([a-zA-Z]+(?:'[a-zA-Z]+)?)|([^a-zA-Z]+)/g
-  let match
-  let wordIndex = 0
-  
-  while ((match = regex.exec(text)) !== null) {
-    if (match[1]) {
-      tokens.push({ type: 'word', value: match[1], wordIndex: wordIndex++ })
-    } else {
-      tokens.push({ type: 'other', value: match[2] })
-    }
-  }
-  
-  return tokens
-}
-
-function removeOptionalSections(text) {
-  return text.replace(/\[OPTIONAL\][\s\S]*?\[\/OPTIONAL\]/g, '')
-}
-
-function parseContentWithOptional(text) {
-  const parts = []
-  let lastIndex = 0
-  const optionalRegex = /\[OPTIONAL\]([\s\S]*?)\[\/OPTIONAL\]/g
-  let match
-  
-  while ((match = optionalRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ content: text.slice(lastIndex, match.index), optional: false })
-    }
-    parts.push({ content: match[1], optional: true })
-    lastIndex = match.index + match[0].length
-  }
-  
-  if (lastIndex < text.length) {
-    parts.push({ content: text.slice(lastIndex), optional: false })
-  }
-  
-  return parts
-}
-
-function parseVerses(text, passageType = 'scripture') {
-  if (passageType === 'poetry') {
-    return parseCouplets(text)
-  }
-  
-  const lines = text.split('\n')
-  const verses = []
-  let currentVerse = null
-  let currentContent = []
-  
-  for (const line of lines) {
-    const verseMatch = line.match(/^(\d+)\s/)
-    if (verseMatch) {
-      if (currentVerse !== null) {
-        verses.push({ number: currentVerse, content: currentContent.join('\n') })
-      }
-      currentVerse = parseInt(verseMatch[1])
-      currentContent = [line]
-    } else if (currentVerse !== null) {
-      currentContent.push(line)
-    } else {
-      if (verses.length === 0 && line.trim()) {
-        verses.push({ number: 0, content: line, isTitle: true })
-      }
-    }
-  }
-  
-  if (currentVerse !== null) {
-    verses.push({ number: currentVerse, content: currentContent.join('\n') })
-  }
-  
-  return verses
-}
-
-function parseCouplets(text) {
-  const lines = text.split('\n').filter(line => {
-    const trimmed = line.trim()
-    return trimmed && !trimmed.match(/^[A-Z].*Act \d+.*Scene \d+/) && trimmed !== '[OPTIONAL]' && trimmed !== '[/OPTIONAL]'
-  })
-  
-  const couplets = []
-  let coupletNum = 1
-  let titleHandled = false
-  
-  for (let i = 0; i < lines.length; i += 2) {
-    const line1 = lines[i]
-    const line2 = lines[i + 1] || ''
-    
-    if (!titleHandled && i === 0) {
-      titleHandled = true
-      if (line1.match(/^[A-Z].*\d+/)) {
-        couplets.push({ number: 0, content: line1, isTitle: true })
-        i--
-        continue
-      }
-    }
-    
-    const content = line2 ? `${line1}\n${line2}` : line1
-    couplets.push({ number: coupletNum++, content, isCouplet: true })
-  }
-  
-  return couplets
-}
-
-function getWordIndicesForVerse(tokens, verseContent, startSearchIndex = 0) {
-  const verseTokens = parseTextIntoTokens(verseContent)
-  const verseWords = verseTokens.filter(t => t.type === 'word').map(t => t.value)
-  
-  const indices = []
-  let verseWordIdx = 0
-  
-  for (let i = startSearchIndex; i < tokens.length && verseWordIdx < verseWords.length; i++) {
-    const token = tokens[i]
-    if (token.type === 'word' && token.value === verseWords[verseWordIdx]) {
-      indices.push(token.wordIndex)
-      verseWordIdx++
-    }
-  }
-  
-  return indices
-}
-
-function selectWordsToDelete(tokens, percentage, totalWords) {
-  const wordTokens = tokens.filter(t => t.type === 'word')
-  const count = Math.max(2, Math.round(totalWords * (percentage / 100)))
-  const actualCount = Math.min(count, wordTokens.length)
-  
-  const indices = []
-  const available = wordTokens.map(t => t.wordIndex)
-  
-  const seededRandom = (seed) => {
-    const x = Math.sin(seed) * 10000
-    return x - Math.floor(x)
-  }
-  
-  for (let i = 0; i < actualCount && available.length > 0; i++) {
-    const seed = i + percentage * 1000
-    const randomIndex = Math.floor(seededRandom(seed) * available.length)
-    indices.push(available[randomIndex])
-    available.splice(randomIndex, 1)
-  }
-  
-  return indices.sort((a, b) => a - b)
-}
-
-function addMoreDeletions(tokens, currentIndices, targetCount, totalWords) {
-  const wordTokens = tokens.filter(t => t.type === 'word')
-  const currentSet = new Set(currentIndices)
-  const available = wordTokens.map(t => t.wordIndex).filter(i => !currentSet.has(i))
-  
-  const toAdd = Math.min(targetCount - currentIndices.length, available.length)
-  if (toAdd <= 0) return [...currentIndices]
-  
-  const newIndices = [...currentIndices]
-  
-  for (let i = 0; i < toAdd && available.length > 0; i++) {
-    const randomIndex = Math.floor(Math.random() * available.length)
-    newIndices.push(available[randomIndex])
-    available.splice(randomIndex, 1)
-  }
-  
-  return newIndices.sort((a, b) => a - b)
-}
-
-function removeDeletions(currentIndices, targetCount) {
-  if (targetCount >= currentIndices.length) return [...currentIndices]
-  const toRemove = currentIndices.length - targetCount
-  const shuffled = [...currentIndices].sort(() => Math.random() - 0.5)
-  return shuffled.slice(toRemove).sort((a, b) => a - b)
-}
-
-function ClozeWord({ word, isDeleted, showAll, isRevealed, wordRef }) {
-  const [isHovered, setIsHovered] = useState(false)
-  
-  const getStateClasses = () => {
-    if (isDeleted && !showAll && !isRevealed && !isHovered) return 'bg-gray-300'
-    if (isDeleted && (showAll || isRevealed || isHovered)) return 'bg-green-200'
-    return ''
-  }
-  
-  if (!isDeleted) {
-    return <span ref={wordRef}>{word}</span>
-  }
-  
-  const revealed = showAll || isRevealed || isHovered
-  
-  return (
-    <span
-      ref={wordRef}
-      className={`inline-block px-1 rounded cursor-pointer transition-colors duration-200 relative ${getStateClasses()}`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <span className={revealed ? 'text-green-900' : 'opacity-0 select-none'}>{word}</span>
-      {!revealed && (
-        <span className="absolute inset-0 flex items-center justify-center text-gray-400 select-none pointer-events-none">
-          {'_'.repeat(word.length)}
-        </span>
-      )}
-    </span>
-  )
-}
+import {
+  parseTextIntoTokens,
+  removeOptionalSections,
+  stripOptionalMarkers,
+  parseVerses,
+  getWordIndicesForVerse
+} from './utils/parsing'
+import {
+  selectWordsToDelete,
+  addMoreDeletions,
+  removeDeletions,
+  calculateMinPercentage,
+  PERCENTAGE_STEP,
+  VERSE_MODE_THRESHOLD
+} from './utils/wordSelection'
+import {
+  getNextInterval,
+  formatTimeUntil,
+  getDueReviews,
+  INTERVALS,
+  COMPLETIONS_FOR_REVIEW
+} from './utils/spacedRepetition'
+import { ClozeWord } from './components/ClozeWord'
+import { PassageSelector } from './components/PassageSelector'
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -223,7 +42,7 @@ function App() {
   const [includeOptional, setIncludeOptional] = useState(true)
   
   const [text, setText] = useState(null)
-  const [deletionPercentage, setDeletionPercentage] = useState(5)
+  const [deletionPercentage, setDeletionPercentage] = useState(PERCENTAGE_STEP)
   const [deletedIndices, setDeletedIndices] = useState([])
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -254,7 +73,7 @@ function App() {
     if (!includeOptional) {
       content = removeOptionalSections(content)
     } else {
-      content = content.replace(/\[OPTIONAL\]/g, '').replace(/\[\/OPTIONAL\]/g, '')
+      content = stripOptionalMarkers(content)
     }
     return content
   }, [selectedPassage, includeOptional])
@@ -269,9 +88,7 @@ function App() {
   }, [tokens])
 
   const minPercentage = useMemo(() => {
-    if (totalWords === 0) return 5
-    const minWords = Math.max(2, Math.min(10, Math.ceil(totalWords * 0.05)))
-    return Math.max(5, Math.ceil((minWords / totalWords) * 100))
+    return calculateMinPercentage(totalWords)
   }, [totalWords])
 
   const allVerses = useMemo(() => {
@@ -361,11 +178,11 @@ function App() {
           if (progressData.verse_progress) {
             setVerseProgress(progressData.verse_progress)
           }
-          if (progressData.deletion_percentage >= 50) {
+          if (progressData.deletion_percentage >= VERSE_MODE_THRESHOLD) {
             setVerseMode(true)
           }
         } else {
-          setDeletionPercentage(5)
+          setDeletionPercentage(PERCENTAGE_STEP)
           setDeletedIndices([])
           setVerseProgress({})
           setVerseMode(false)
@@ -410,21 +227,21 @@ function App() {
   }, [tokens, totalWords])
 
   const handleHarder = () => {
-    const newPercentage = Math.min(100, deletionPercentage + 5)
+    const newPercentage = Math.min(100, deletionPercentage + PERCENTAGE_STEP)
     const targetCount = Math.max(2, Math.round(totalWords * (newPercentage / 100)))
     const newIndices = addMoreDeletions(tokens, deletedIndices, targetCount, totalWords)
     setDeletionPercentage(newPercentage)
     setDeletedIndices(newIndices)
     setShowAll(false)
     
-    if (newPercentage >= 50 && !verseMode) {
+    if (newPercentage >= VERSE_MODE_THRESHOLD && !verseMode) {
       setVerseMode(true)
       setCurrentVerseIndex(0)
     }
   }
 
   const handleEasier = useCallback(() => {
-    const newPercentage = Math.max(minPercentage, deletionPercentage - 5)
+    const newPercentage = Math.max(minPercentage, deletionPercentage - PERCENTAGE_STEP)
     const targetCount = Math.max(2, Math.round(totalWords * (newPercentage / 100)))
     const newIndices = removeDeletions(deletedIndices, targetCount)
     setDeletionPercentage(newPercentage)

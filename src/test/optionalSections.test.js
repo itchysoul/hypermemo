@@ -1,59 +1,10 @@
 import { describe, it, expect } from 'vitest'
-
-function removeOptionalSections(text) {
-  return text.replace(/\[OPTIONAL\][\s\S]*?\[\/OPTIONAL\]/g, '')
-}
-
-function parseContentWithOptional(text) {
-  const parts = []
-  let lastIndex = 0
-  const optionalRegex = /\[OPTIONAL\]([\s\S]*?)\[\/OPTIONAL\]/g
-  let match
-  
-  while ((match = optionalRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ content: text.slice(lastIndex, match.index), optional: false })
-    }
-    parts.push({ content: match[1], optional: true })
-    lastIndex = match.index + match[0].length
-  }
-  
-  if (lastIndex < text.length) {
-    parts.push({ content: text.slice(lastIndex), optional: false })
-  }
-  
-  return parts
-}
-
-function parseCouplets(text) {
-  const lines = text.split('\n').filter(line => {
-    const trimmed = line.trim()
-    return trimmed && !trimmed.match(/^[A-Z].*Act \d+.*Scene \d+/) && trimmed !== '[OPTIONAL]' && trimmed !== '[/OPTIONAL]'
-  })
-  
-  const couplets = []
-  let coupletNum = 1
-  let titleHandled = false
-  
-  for (let i = 0; i < lines.length; i += 2) {
-    const line1 = lines[i]
-    const line2 = lines[i + 1] || ''
-    
-    if (!titleHandled && i === 0) {
-      titleHandled = true
-      if (line1.match(/^[A-Z].*\d+/)) {
-        couplets.push({ number: 0, content: line1, isTitle: true })
-        i--
-        continue
-      }
-    }
-    
-    const content = line2 ? `${line1}\n${line2}` : line1
-    couplets.push({ number: coupletNum++, content, isCouplet: true })
-  }
-  
-  return couplets
-}
+import {
+  removeOptionalSections,
+  parseContentWithOptional,
+  parseCouplets,
+  parseTextIntoTokens
+} from '../utils/parsing'
 
 describe('removeOptionalSections - edge cases', () => {
   it('handles nested-looking content (not actually nested)', () => {
@@ -171,23 +122,6 @@ F`
 })
 
 describe('Integration: optional sections with word counting', () => {
-  function parseTextIntoTokens(text) {
-    const tokens = []
-    const regex = /([a-zA-Z]+(?:'[a-zA-Z]+)?)|([^a-zA-Z]+)/g
-    let match
-    let wordIndex = 0
-    
-    while ((match = regex.exec(text)) !== null) {
-      if (match[1]) {
-        tokens.push({ type: 'word', value: match[1], wordIndex: wordIndex++ })
-      } else {
-        tokens.push({ type: 'other', value: match[2] })
-      }
-    }
-    
-    return tokens
-  }
-
   it('word count changes when optional sections removed', () => {
     const fullText = 'keep this [OPTIONAL]remove these words[/OPTIONAL] and this'
     const withoutOptional = removeOptionalSections(fullText)
