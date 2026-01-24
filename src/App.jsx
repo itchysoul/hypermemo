@@ -46,6 +46,7 @@ function App() {
   const [optionalExpanded, setOptionalExpanded] = useState(false)
   const [fontFamily, setFontFamily] = useState(DEFAULT_FONT_FAMILY)
   const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE)
+  const [showFontControls, setShowFontControls] = useState(false)
   
   const [text, setText] = useState(null)
   const [deletionPercentage, setDeletionPercentage] = useState(PERCENTAGE_STEP)
@@ -768,30 +769,45 @@ function App() {
           )}
           
           <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">Font:</label>
-              <select
-                value={fontFamily}
-                onChange={(e) => setFontFamily(e.target.value)}
-                className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {FONT_FAMILIES.map(f => (
-                  <option key={f.value} value={f.value}>{f.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">Size:</label>
-              <select
-                value={fontSize}
-                onChange={(e) => setFontSize(parseInt(e.target.value))}
-                className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {FONT_SIZES.map(s => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </div>
+            <button
+              onClick={() => setShowFontControls(!showFontControls)}
+              className={`flex items-center justify-center w-8 h-8 rounded border-2 font-serif text-lg transition-colors ${
+                showFontControls 
+                  ? 'border-blue-500 bg-blue-50 text-blue-600' 
+                  : 'border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50'
+              }`}
+              title="Font settings"
+            >
+              A
+            </button>
+            {showFontControls && (
+              <>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Font:</label>
+                  <select
+                    value={fontFamily}
+                    onChange={(e) => setFontFamily(e.target.value)}
+                    className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {FONT_FAMILIES.map(f => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Size:</label>
+                  <select
+                    value={fontSize}
+                    onChange={(e) => setFontSize(parseInt(e.target.value))}
+                    className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {FONT_SIZES.map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
           </div>
           
           <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
