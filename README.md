@@ -1,4 +1,4 @@
-# Hypermemo
+# Wordgood
 
 A scripture memorization tool using cloze deletion with spaced repetition.
 
