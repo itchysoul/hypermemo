@@ -47,6 +47,7 @@ function App() {
   const [fontFamily, setFontFamily] = useState(DEFAULT_FONT_FAMILY)
   const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE)
   const [showFontControls, setShowFontControls] = useState(false)
+  const [showIntroDialog, setShowIntroDialog] = useState(false)
   
   const [text, setText] = useState(null)
   const [deletionPercentage, setDeletionPercentage] = useState(PERCENTAGE_STEP)
@@ -692,8 +693,18 @@ function App() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex flex-wrap gap-4 items-center mb-4">
             {!verseMode && (
-              <div className="text-sm text-gray-600">
-                <span className="font-medium">{deletedCount}</span> of <span className="font-medium">{totalWords}</span> words hidden ({deletionPercentage}%)
+              <div className="flex items-center gap-3">
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium">{deletedCount}</span> of <span className="font-medium">{totalWords}</span> words hidden ({deletionPercentage}%)
+                </div>
+                {selectedPassage?.introduction && (
+                  <button
+                    onClick={() => setShowIntroDialog(true)}
+                    className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors"
+                  >
+                    Intro
+                  </button>
+                )}
               </div>
             )}
             
@@ -1021,6 +1032,38 @@ function App() {
           </div>
         </div>
       </div>
+      
+      {showIntroDialog && selectedPassage?.introduction && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setShowIntroDialog(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  {selectedPassage.title}
+                </h2>
+                <button
+                  onClick={() => setShowIntroDialog(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+              {selectedPassage.subtitle && (
+                <p className="text-sm text-gray-500 mb-4">{selectedPassage.subtitle}</p>
+              )}
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {selectedPassage.introduction}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
