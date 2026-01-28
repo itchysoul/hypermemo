@@ -1,177 +1,34 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import './index.css'
 import { supabase } from './supabaseClient'
-
-const TEXT_DATA = {
-  id: 1,
-  title: 'THEOLOGICAL VIRTUES - LOVE',
-  content: `1 Corinthians 13 
-
-1 Though I speak with the tongues of men and of angels, but have not love, I have become sounding brass or a clanging cymbal. 
-2 And though I have the gift of prophecy, and understand all mysteries and all knowledge, and though I have all faith, so that I could remove mountains, but have not love, I am nothing. 
-3 And though I bestow all my goods to feed the poor, and though I give my body to be burned, but have not love, it profits me nothing.
-
-4 Love suffers long and is kind; love does not envy; love does not parade itself, is not puffed up; 
-5 does not behave rudely, does not seek its own, is not provoked, thinks no evil; 
-6 does not rejoice in iniquity, but rejoices in the truth; 
-7 bears all things, believes all things, hopes all things, endures all things.
-
-8 Love never fails. But whether there are prophecies, they will fail; whether there are tongues, they will cease; whether there is knowledge, it will vanish away. 
-9 For we know in part and we prophesy in part. 
-10 But when that which is perfect has come, then that which is in part will be done away.
-—----------------------א
-
-11 When I was a child, I spoke as a child, I understood as a child, I thought as a child; but when I became a man, I put away childish things. 
-12 For now we see in a mirror, dimly, but then face to face. Now I know in part, but then I shall know just as I also am known.
-
-13 And now abide faith, hope, love, these three; but the greatest of these is love.`
-}
-
-function parseTextIntoTokens(text) {
-  const tokens = []
-  const regex = /([a-zA-Z]+(?:'[a-zA-Z]+)?)|([^a-zA-Z]+)/g
-  let match
-  let wordIndex = 0
-  
-  while ((match = regex.exec(text)) !== null) {
-    if (match[1]) {
-      tokens.push({ type: 'word', value: match[1], wordIndex: wordIndex++ })
-    } else {
-      tokens.push({ type: 'other', value: match[2] })
-    }
-  }
-  
-  return tokens
-}
-
-function parseVerses(text) {
-  const lines = text.split('\n')
-  const verses = []
-  let currentVerse = null
-  let currentContent = []
-  
-  for (const line of lines) {
-    const verseMatch = line.match(/^(\d+)\s/)
-    if (verseMatch) {
-      if (currentVerse !== null) {
-        verses.push({ number: currentVerse, content: currentContent.join('\n') })
-      }
-      currentVerse = parseInt(verseMatch[1])
-      currentContent = [line]
-    } else if (currentVerse !== null) {
-      currentContent.push(line)
-    } else {
-      if (verses.length === 0 && line.trim()) {
-        verses.push({ number: 0, content: line, isTitle: true })
-      }
-    }
-  }
-  
-  if (currentVerse !== null) {
-    verses.push({ number: currentVerse, content: currentContent.join('\n') })
-  }
-  
-  return verses
-}
-
-function getWordIndicesForVerse(tokens, verseContent, startSearchIndex = 0) {
-  const verseTokens = parseTextIntoTokens(verseContent)
-  const verseWords = verseTokens.filter(t => t.type === 'word').map(t => t.value)
-  
-  const indices = []
-  let verseWordIdx = 0
-  
-  for (let i = startSearchIndex; i < tokens.length && verseWordIdx < verseWords.length; i++) {
-    const token = tokens[i]
-    if (token.type === 'word' && token.value === verseWords[verseWordIdx]) {
-      indices.push(token.wordIndex)
-      verseWordIdx++
-    }
-  }
-  
-  return indices
-}
-
-function selectWordsToDelete(tokens, percentage, totalWords) {
-  const wordTokens = tokens.filter(t => t.type === 'word')
-  const count = Math.max(2, Math.round(totalWords * (percentage / 100)))
-  const actualCount = Math.min(count, wordTokens.length)
-  
-  const indices = []
-  const available = wordTokens.map(t => t.wordIndex)
-  
-  const seededRandom = (seed) => {
-    const x = Math.sin(seed) * 10000
-    return x - Math.floor(x)
-  }
-  
-  for (let i = 0; i < actualCount && available.length > 0; i++) {
-    const seed = i + percentage * 1000
-    const randomIndex = Math.floor(seededRandom(seed) * available.length)
-    indices.push(available[randomIndex])
-    available.splice(randomIndex, 1)
-  }
-  
-  return indices.sort((a, b) => a - b)
-}
-
-function addMoreDeletions(tokens, currentIndices, targetCount, totalWords) {
-  const wordTokens = tokens.filter(t => t.type === 'word')
-  const currentSet = new Set(currentIndices)
-  const available = wordTokens.map(t => t.wordIndex).filter(i => !currentSet.has(i))
-  
-  const toAdd = Math.min(targetCount - currentIndices.length, available.length)
-  if (toAdd <= 0) return [...currentIndices]
-  
-  const newIndices = [...currentIndices]
-  
-  for (let i = 0; i < toAdd && available.length > 0; i++) {
-    const randomIndex = Math.floor(Math.random() * available.length)
-    newIndices.push(available[randomIndex])
-    available.splice(randomIndex, 1)
-  }
-  
-  return newIndices.sort((a, b) => a - b)
-}
-
-function removeDeletions(currentIndices, targetCount) {
-  if (targetCount >= currentIndices.length) return [...currentIndices]
-  const toRemove = currentIndices.length - targetCount
-  const shuffled = [...currentIndices].sort(() => Math.random() - 0.5)
-  return shuffled.slice(toRemove).sort((a, b) => a - b)
-}
-
-function ClozeWord({ word, isDeleted, showAll, isRevealed, wordRef }) {
-  const [isHovered, setIsHovered] = useState(false)
-  
-  const getStateClasses = () => {
-    if (isDeleted && !showAll && !isRevealed && !isHovered) return 'bg-gray-300'
-    if (isDeleted && (showAll || isRevealed || isHovered)) return 'bg-green-200'
-    return ''
-  }
-  
-  if (!isDeleted) {
-    return <span ref={wordRef}>{word}</span>
-  }
-  
-  const revealed = showAll || isRevealed || isHovered
-  
-  return (
-    <span
-      ref={wordRef}
-      className={`inline-block px-1 rounded cursor-pointer transition-colors duration-200 relative ${getStateClasses()}`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <span className={revealed ? 'text-green-900' : 'opacity-0 select-none'}>{word}</span>
-      {!revealed && (
-        <span className="absolute inset-0 flex items-center justify-center text-gray-400 select-none pointer-events-none">
-          {'_'.repeat(word.length)}
-        </span>
-      )}
-    </span>
-  )
-}
+import { PASSAGES } from './passages'
+import {
+  parseTextIntoTokens,
+  removeOptionalSections,
+  stripOptionalMarkers,
+  parseVerses,
+  getWordIndicesForVerse,
+  hasOptionalSections,
+  parseContentWithOptional
+} from './utils/parsing'
+import {
+  selectWordsToDelete,
+  addMoreDeletions,
+  removeDeletions,
+  calculateMinPercentage,
+  PERCENTAGE_STEP,
+  VERSE_MODE_THRESHOLD
+} from './utils/wordSelection'
+import {
+  getNextInterval,
+  formatTimeUntil,
+  getDueReviews,
+  INTERVALS,
+  COMPLETIONS_FOR_REVIEW
+} from './utils/spacedRepetition'
+import { FONT_FAMILIES, FONT_SIZES, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE } from './utils/fontConfig'
+import { ClozeWord } from './components/ClozeWord'
+import { PassageSelector } from './components/PassageSelector'
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -183,8 +40,17 @@ function App() {
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   
+  const [selectedPassageId, setSelectedPassageId] = useState(1)
+  const [showPassageSelector, setShowPassageSelector] = useState(false)
+  const [includeOptional, setIncludeOptional] = useState(true)
+  const [optionalExpanded, setOptionalExpanded] = useState(false)
+  const [fontFamily, setFontFamily] = useState(DEFAULT_FONT_FAMILY)
+  const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE)
+  const [showFontControls, setShowFontControls] = useState(false)
+  const [showIntroDialog, setShowIntroDialog] = useState(false)
+  
   const [text, setText] = useState(null)
-  const [deletionPercentage, setDeletionPercentage] = useState(5)
+  const [deletionPercentage, setDeletionPercentage] = useState(PERCENTAGE_STEP)
   const [deletedIndices, setDeletedIndices] = useState([])
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -192,6 +58,7 @@ function App() {
   
   const [verticalRevealMode, setVerticalRevealMode] = useState(true)
   const [cursorY, setCursorY] = useState(-1)
+  const [cursorX, setCursorX] = useState(-1)
   
   const [verseMode, setVerseMode] = useState(false)
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0)
@@ -204,25 +71,42 @@ function App() {
   const wordRefsMap = useRef(new Map())
   const textContainerRef = useRef(null)
 
+  const selectedPassage = useMemo(() => {
+    return PASSAGES.find(p => p.id === selectedPassageId) || PASSAGES[0]
+  }, [selectedPassageId])
+
+  const passageHasOptional = useMemo(() => {
+    return selectedPassage ? hasOptionalSections(selectedPassage.content) : false
+  }, [selectedPassage])
+
+  const processedContent = useMemo(() => {
+    if (!selectedPassage) return ''
+    let content = selectedPassage.content
+    if (!includeOptional && !optionalExpanded) {
+      content = removeOptionalSections(content)
+    } else {
+      content = stripOptionalMarkers(content)
+    }
+    return content
+  }, [selectedPassage, includeOptional, optionalExpanded])
+
   const tokens = useMemo(() => {
-    if (!text) return []
-    return parseTextIntoTokens(text.content)
-  }, [text])
+    if (!processedContent) return []
+    return parseTextIntoTokens(processedContent)
+  }, [processedContent])
 
   const totalWords = useMemo(() => {
     return tokens.filter(t => t.type === 'word').length
   }, [tokens])
 
   const minPercentage = useMemo(() => {
-    if (totalWords === 0) return 5
-    const minWords = Math.max(2, Math.min(10, Math.ceil(totalWords * 0.05)))
-    return Math.max(5, Math.ceil((minWords / totalWords) * 100))
+    return calculateMinPercentage(totalWords)
   }, [totalWords])
 
   const allVerses = useMemo(() => {
-    if (!text) return []
-    return parseVerses(text.content)
-  }, [text])
+    if (!processedContent) return []
+    return parseVerses(processedContent, selectedPassage?.type || 'scripture')
+  }, [processedContent, selectedPassage])
 
   const verses = useMemo(() => {
     return allVerses.filter(v => !v.isTitle)
@@ -291,13 +175,13 @@ function App() {
         return
       }
       try {
-        setText(TEXT_DATA)
+        setText(selectedPassage)
 
         const { data: progressData } = await supabase
           .from('progress')
           .select('*')
           .eq('user_id', user.id)
-          .eq('text_id', textId)
+          .eq('text_id', selectedPassageId)
           .single()
         
         if (progressData) {
@@ -306,10 +190,33 @@ function App() {
           if (progressData.verse_progress) {
             setVerseProgress(progressData.verse_progress)
           }
-          if (progressData.deletion_percentage >= 50) {
+          if (progressData.deletion_percentage >= VERSE_MODE_THRESHOLD) {
             setVerseMode(true)
           }
+        } else {
+          setDeletionPercentage(PERCENTAGE_STEP)
+          setDeletedIndices([])
+          setVerseProgress({})
+          setVerseMode(false)
         }
+
+        const { data: settingsData } = await supabase
+          .from('user_passage_settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('passage_id', selectedPassageId)
+          .single()
+        
+        if (settingsData) {
+          setFontFamily(settingsData.font_family || DEFAULT_FONT_FAMILY)
+          setFontSize(settingsData.font_size || DEFAULT_FONT_SIZE)
+          setIncludeOptional(settingsData.include_optional !== false)
+        } else {
+          setFontFamily(DEFAULT_FONT_FAMILY)
+          setFontSize(DEFAULT_FONT_SIZE)
+          setIncludeOptional(true)
+        }
+        setOptionalExpanded(false)
       } catch (err) {
         console.error('Failed to load data:', err)
       } finally {
@@ -317,7 +224,7 @@ function App() {
       }
     }
     loadData()
-  }, [textId, user])
+  }, [selectedPassageId, selectedPassage, user])
 
   useEffect(() => {
     if (!user || loading) return
@@ -329,7 +236,7 @@ function App() {
           .from('progress')
           .upsert({
             user_id: user.id,
-            text_id: textId,
+            text_id: selectedPassageId,
             deletion_percentage: deletionPercentage,
             deleted_indices: deletedIndices,
             verse_progress: verseProgress
@@ -340,7 +247,7 @@ function App() {
     }, 500)
     
     return () => clearTimeout(saveTimeout)
-  }, [user, loading, textId, deletionPercentage, deletedIndices, verseProgress])
+  }, [user, loading, selectedPassageId, deletionPercentage, deletedIndices, verseProgress])
 
   useEffect(() => {
     if (tokens.length > 0 && deletedIndices.length === 0) {
@@ -349,22 +256,44 @@ function App() {
     }
   }, [tokens, totalWords])
 
+  useEffect(() => {
+    if (!user || loading) return
+    
+    const saveTimeout = setTimeout(async () => {
+      try {
+        await supabase
+          .from('user_passage_settings')
+          .upsert({
+            user_id: user.id,
+            passage_id: selectedPassageId,
+            font_family: fontFamily,
+            font_size: fontSize,
+            include_optional: includeOptional
+          }, { onConflict: 'user_id,passage_id' })
+      } catch (err) {
+        console.error('Failed to save settings:', err)
+      }
+    }, 500)
+    
+    return () => clearTimeout(saveTimeout)
+  }, [user, loading, selectedPassageId, fontFamily, fontSize, includeOptional])
+
   const handleHarder = () => {
-    const newPercentage = Math.min(100, deletionPercentage + 5)
+    const newPercentage = Math.min(100, deletionPercentage + PERCENTAGE_STEP)
     const targetCount = Math.max(2, Math.round(totalWords * (newPercentage / 100)))
     const newIndices = addMoreDeletions(tokens, deletedIndices, targetCount, totalWords)
     setDeletionPercentage(newPercentage)
     setDeletedIndices(newIndices)
     setShowAll(false)
     
-    if (newPercentage >= 50 && !verseMode) {
+    if (newPercentage >= VERSE_MODE_THRESHOLD && !verseMode) {
       setVerseMode(true)
       setCurrentVerseIndex(0)
     }
   }
 
   const handleEasier = useCallback(() => {
-    const newPercentage = Math.max(minPercentage, deletionPercentage - 5)
+    const newPercentage = Math.max(minPercentage, deletionPercentage - PERCENTAGE_STEP)
     const targetCount = Math.max(2, Math.round(totalWords * (newPercentage / 100)))
     const newIndices = removeDeletions(deletedIndices, targetCount)
     setDeletionPercentage(newPercentage)
@@ -372,8 +301,6 @@ function App() {
     setShowAll(false)
   }, [minPercentage, deletionPercentage, totalWords, deletedIndices])
 
-  const [cursorX, setCursorX] = useState(-1)
-  
   const handleMouseMove = useCallback((e) => {
     if (verticalRevealMode) {
       setCursorY(e.clientY)
@@ -674,10 +601,70 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 py-8 px-4">
+      {showPassageSelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Select Passage</h2>
+              <button
+                onClick={() => setShowPassageSelector(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-4">
+              {PASSAGES.map(passage => (
+                <button
+                  key={passage.id}
+                  onClick={() => {
+                    setSelectedPassageId(passage.id)
+                    setShowPassageSelector(false)
+                    setLoading(true)
+                    setDeletedIndices([])
+                    setCurrentVerseIndex(0)
+                  }}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
+                    selectedPassageId === passage.id
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-2 py-0.5 text-xs rounded ${
+                      passage.type === 'poetry' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
+                    }`}>
+                      {passage.type}
+                    </span>
+                    {selectedPassageId === passage.id && (
+                      <span className="text-blue-500 text-sm">✓ Selected</span>
+                    )}
+                  </div>
+                  <h3 className="font-bold text-gray-800">{passage.title}</h3>
+                  <p className="text-sm text-gray-600">{passage.subtitle}</p>
+                  {passage.introduction && (
+                    <p className="text-xs text-gray-500 mt-2 line-clamp-2">{passage.introduction}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-2">
-          <h1 className="text-3xl font-bold text-gray-800">{text?.title}</h1>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800">{selectedPassage?.title}</h1>
+            <p className="text-sm text-gray-600">{selectedPassage?.subtitle}</p>
+          </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowPassageSelector(true)}
+              className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
+            >
+              Select Passage
+            </button>
             <span className="text-sm text-gray-600">Hi, {user.username}</span>
             <div className="relative group">
               <button
@@ -706,8 +693,18 @@ function App() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex flex-wrap gap-4 items-center mb-4">
             {!verseMode && (
-              <div className="text-sm text-gray-600">
-                <span className="font-medium">{deletedCount}</span> of <span className="font-medium">{totalWords}</span> words hidden ({deletionPercentage}%)
+              <div className="flex items-center gap-3">
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium">{deletedCount}</span> of <span className="font-medium">{totalWords}</span> words hidden ({deletionPercentage}%)
+                </div>
+                {selectedPassage?.introduction && (
+                  <button
+                    onClick={() => setShowIntroDialog(true)}
+                    className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors"
+                  >
+                    Intro
+                  </button>
+                )}
               </div>
             )}
             
@@ -761,6 +758,69 @@ function App() {
             )}
           </div>
           
+          {passageHasOptional && (
+            <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeOptional}
+                  onChange={(e) => {
+                    setIncludeOptional(e.target.checked)
+                    setOptionalExpanded(false)
+                    setDeletedIndices([])
+                  }}
+                  className="w-5 h-5 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">Include Optional Sections</span>
+              </label>
+              <span className="text-xs text-gray-500">
+                {includeOptional ? 'Showing full passage' : (optionalExpanded ? 'Viewing optional (click ⋯ to hide)' : 'Click ⋯ in text to view')}
+              </span>
+            </div>
+          )}
+          
+          <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
+            <button
+              onClick={() => setShowFontControls(!showFontControls)}
+              className={`flex items-center justify-center w-8 h-8 rounded border-2 font-serif text-lg transition-colors ${
+                showFontControls 
+                  ? 'border-blue-500 bg-blue-50 text-blue-600' 
+                  : 'border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50'
+              }`}
+              title="Font settings"
+            >
+              A
+            </button>
+            {showFontControls && (
+              <>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Font:</label>
+                  <select
+                    value={fontFamily}
+                    onChange={(e) => setFontFamily(e.target.value)}
+                    className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {FONT_FAMILIES.map(f => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Size:</label>
+                  <select
+                    value={fontSize}
+                    onChange={(e) => setFontSize(parseInt(e.target.value))}
+                    className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {FONT_SIZES.map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+          </div>
+          
           <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -772,10 +832,14 @@ function App() {
                 }}
                 className="w-5 h-5 rounded"
               />
-              <span className="text-sm font-medium text-gray-700">Verse at a Time</span>
+              <span className="text-sm font-medium text-gray-700">
+                {selectedPassage?.type === 'poetry' ? 'Couplet at a Time' : 'Verse at a Time'}
+              </span>
             </label>
             {!verseMode && (
-              <span className="text-xs text-gray-500">Will switch to verse at a time mode at 50% hidden.</span>
+              <span className="text-xs text-gray-500">
+                Will switch to {selectedPassage?.type === 'poetry' ? 'couplet' : 'verse'} at a time mode at 50% hidden.
+              </span>
             )}
             {verseMode && verses.length > 0 && (
               <div className="flex items-center gap-2">
@@ -787,7 +851,7 @@ function App() {
                   ← Previous
                 </button>
                 <span className="text-sm text-gray-600">
-                  Verse {currentVerse?.number}
+                  {selectedPassage?.type === 'poetry' ? 'Couplet' : 'Verse'} {currentVerse?.number}
                   {verseProgress[currentVerse?.number]?.completions > 0 && (
                     <span className="ml-1 text-xs text-green-600">
                       (✓{verseProgress[currentVerse?.number]?.completions})
@@ -821,7 +885,9 @@ function App() {
                     onClick={handleCompleteVerse}
                     className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
                   >
-                    {reviewingVerse !== null ? `Complete Review ${currentVerse?.number} →` : `Complete Verse ${currentVerse?.number} →`}
+                    {reviewingVerse !== null 
+                      ? `Complete Review ${currentVerse?.number} →` 
+                      : `Complete ${selectedPassage?.type === 'poetry' ? 'Couplet' : 'Verse'} ${currentVerse?.number} →`}
                   </button>
                 )}
               </div>
@@ -838,7 +904,7 @@ function App() {
                     onClick={() => handleStartReview(verseNum)}
                     className="px-3 py-1 text-sm bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors"
                   >
-                    Review Verse {verseNum}
+                    Review {selectedPassage?.type === 'poetry' ? 'Couplet' : 'Verse'} {verseNum}
                   </button>
                 ))}
               </div>
@@ -847,13 +913,16 @@ function App() {
           
           {verseMode && Object.keys(verseProgress).length > 0 && (
             <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <div className="text-sm font-medium text-gray-700 mb-2">Verse Progress:</div>
+              <div className="text-sm font-medium text-gray-700 mb-2">
+                {selectedPassage?.type === 'poetry' ? 'Couplet' : 'Verse'} Progress:
+              </div>
               <div className="flex flex-wrap gap-2 text-xs">
                 {verses.map(v => {
                   const p = verseProgress[v.number]
+                  const label = selectedPassage?.type === 'poetry' ? 'C' : 'V'
                   if (!p) return (
                     <span key={v.number} className="px-2 py-1 bg-gray-200 text-gray-600 rounded">
-                      V{v.number}: not started
+                      {label}{v.number}: not started
                     </span>
                   )
                   const timeUntil = p.nextReview ? p.nextReview - now : null
@@ -866,7 +935,7 @@ function App() {
                           : 'bg-green-200 text-green-800'
                       }`}
                     >
-                      V{v.number}: {p.completions}x
+                      {label}{v.number}: {p.completions}x
                       {timeUntil !== null && (
                         <span className="ml-1">
                           ({timeUntil <= 0 ? 'due!' : formatTimeUntil(timeUntil)})
@@ -883,33 +952,118 @@ function App() {
         <div className="bg-white rounded-lg shadow-md p-6">
           <div 
             ref={textContainerRef}
-            className="text-lg leading-relaxed whitespace-pre-wrap"
+            className="leading-relaxed whitespace-pre-wrap"
+            style={{ fontFamily, fontSize: `${fontSize}px` }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
-            {tokens.map((token, idx) => {
-              if (token.type === 'word') {
-                const isDeletedByPercentage = deletedIndices.includes(token.wordIndex)
-                const isDeletedByVerse = verseMode && isWordInCurrentVerse(token.wordIndex)
-                const isDeleted = verseMode ? isDeletedByVerse : isDeletedByPercentage
-                return (
-                  <ClozeWord
-                    key={idx}
-                    word={token.value}
-                    isDeleted={isDeleted}
-                    showAll={showAll}
-                    isRevealed={isWordRevealed(token.wordIndex)}
-                    wordRef={(el) => {
-                      if (el) wordRefsMap.current.set(token.wordIndex, el)
-                    }}
-                  />
-                )
-              }
-              return <span key={idx}>{token.value}</span>
-            })}
+            {!includeOptional && passageHasOptional && !optionalExpanded ? (
+              <>
+                {(() => {
+                  const parts = parseContentWithOptional(selectedPassage.content)
+                  return parts.map((part, partIdx) => {
+                    if (part.optional) {
+                      return (
+                        <button
+                          key={`opt-${partIdx}`}
+                          onClick={() => setOptionalExpanded(true)}
+                          className="inline-block px-2 py-1 mx-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded cursor-pointer transition-colors"
+                          title="Click to view optional section"
+                          style={{ fontSize: `${fontSize}px` }}
+                        >
+                          ⋯
+                        </button>
+                      )
+                    }
+                    const partTokens = parseTextIntoTokens(part.content)
+                    return partTokens.map((token, idx) => {
+                      if (token.type === 'word') {
+                        const isDeletedByPercentage = deletedIndices.includes(token.wordIndex)
+                        const isDeletedByVerse = verseMode && isWordInCurrentVerse(token.wordIndex)
+                        const isDeleted = verseMode ? isDeletedByVerse : isDeletedByPercentage
+                        return (
+                          <ClozeWord
+                            key={`${partIdx}-${idx}`}
+                            word={token.value}
+                            isDeleted={isDeleted}
+                            showAll={showAll}
+                            isRevealed={isWordRevealed(token.wordIndex)}
+                            wordRef={(el) => {
+                              if (el) wordRefsMap.current.set(token.wordIndex, el)
+                            }}
+                          />
+                        )
+                      }
+                      return <span key={`${partIdx}-${idx}`}>{token.value}</span>
+                    })
+                  })
+                })()}
+              </>
+            ) : (
+              tokens.map((token, idx) => {
+                if (token.type === 'word') {
+                  const isDeletedByPercentage = deletedIndices.includes(token.wordIndex)
+                  const isDeletedByVerse = verseMode && isWordInCurrentVerse(token.wordIndex)
+                  const isDeleted = verseMode ? isDeletedByVerse : isDeletedByPercentage
+                  return (
+                    <ClozeWord
+                      key={idx}
+                      word={token.value}
+                      isDeleted={isDeleted}
+                      showAll={showAll}
+                      isRevealed={isWordRevealed(token.wordIndex)}
+                      wordRef={(el) => {
+                        if (el) wordRefsMap.current.set(token.wordIndex, el)
+                      }}
+                    />
+                  )
+                }
+                return <span key={idx}>{token.value}</span>
+              })
+            )}
+            {!includeOptional && optionalExpanded && passageHasOptional && (
+              <button
+                onClick={() => setOptionalExpanded(false)}
+                className="block mt-4 px-3 py-1 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              >
+                Hide optional sections
+              </button>
+            )}
           </div>
         </div>
       </div>
+      
+      {showIntroDialog && selectedPassage?.introduction && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setShowIntroDialog(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  {selectedPassage.title}
+                </h2>
+                <button
+                  onClick={() => setShowIntroDialog(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+              {selectedPassage.subtitle && (
+                <p className="text-sm text-gray-500 mb-4">{selectedPassage.subtitle}</p>
+              )}
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {selectedPassage.introduction}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
