@@ -1,10 +1,8 @@
-export const PASSAGES = [
-  {
-    id: 1,
-    type: 'scripture',
-    title: 'THEOLOGICAL VIRTUES - LOVE',
-    subtitle: '1 Corinthians 13',
-    content: `1 Corinthians 13 
+-- Seed passages table with initial content
+-- Using dollar-quoting ($$) for content with special characters
+
+INSERT INTO passages (id, type, title, subtitle, introduction, content, is_public) VALUES
+(1, 'scripture', 'THEOLOGICAL VIRTUES - LOVE', '1 Corinthians 13', NULL, $$1 Corinthians 13 
 
 1 Though I speak with the tongues of men and of angels, but have not love, I have become sounding brass or a clanging cymbal. 
 2 And though I have the gift of prophecy, and understand all mysteries and all knowledge, and though I have all faith, so that I could remove mountains, but have not love, I am nothing. 
@@ -23,15 +21,10 @@ export const PASSAGES = [
 11 When I was a child, I spoke as a child, I understood as a child, I thought as a child; but when I became a man, I put away childish things. 
 12 For now we see in a mirror, dimly, but then face to face. Now I know in part, but then I shall know just as I also am known.
 
-13 And now abide faith, hope, love, these three; but the greatest of these is love.`
-  },
-  {
-    id: 2,
-    type: 'poetry',
-    title: 'THE CARDINAL VIRTUES - PRUDENCE',
-    subtitle: 'Hamlet Act 3, Scene 1',
-    introduction: `PRUDENCE is the wisdom to know the right course of action to take in the face of uncertainty. When to be cautious and when to act with expeditious courage. This scene sees Hamlet in confusion about whether to act to avenge his father's death and uncertain whether that vengeance is to be wished or maybe even his own death is more to be desired. He looks as he should, to the question of his eternal destiny "what dreams may come", though his uncertainty at that seems to contribute to his wavering attempt at prudent action here on "this mortal coil."`,
-    content: `Hamlet Act 3, Scene 1
+13 And now abide faith, hope, love, these three; but the greatest of these is love.$$, true);
+
+INSERT INTO passages (id, type, title, subtitle, introduction, content, is_public) VALUES
+(2, 'poetry', 'THE CARDINAL VIRTUES - PRUDENCE', 'Hamlet Act 3, Scene 1', $$PRUDENCE is the wisdom to know the right course of action to take in the face of uncertainty. When to be cautious and when to act with expeditious courage. This scene sees Hamlet in confusion about whether to act to avenge his father's death and uncertain whether that vengeance is to be wished or maybe even his own death is more to be desired. He looks as he should, to the question of his eternal destiny "what dreams may come", though his uncertainty at that seems to contribute to his wavering attempt at prudent action here on "this mortal coil."$$, $$Hamlet Act 3, Scene 1
 
 To be, or not to be, that is the question:
 Whether 'tis nobler in the mind to suffer
@@ -67,14 +60,10 @@ And thus the native hue of resolution
 Is sicklied o'er with the pale cast of thought,
 And enterprises of great pith and moment
 With this regard their currents turn awry
-And lose the name of action.`
-  },
-  {
-    id: 3,
-    type: 'scripture',
-    title: 'THEOLOGICAL VIRTUES - HOPE',
-    subtitle: '1 Peter 1',
-    content: `1 Peter 1
+And lose the name of action.$$, true);
+
+INSERT INTO passages (id, type, title, subtitle, introduction, content, is_public) VALUES
+(3, 'scripture', 'THEOLOGICAL VIRTUES - HOPE', '1 Peter 1', NULL, $$1 Peter 1
 
 3 Blessed be the God and Father of our Lord Jesus Christ, who according to His abundant mercy has begotten us again to a living hope through the resurrection of Jesus Christ from the dead, 4 to an inheritance incorruptible and undefiled and that does not fade away, reserved in heaven for you, 5 who are kept by the power of God through faith for salvation ready to be revealed in the last time.
 
@@ -84,14 +73,10 @@ And lose the name of action.`
 
 —----------------------א
 
-13 Therefore gird up the loins of your mind, be sober, and rest your hope fully upon the grace that is to be brought to you at the revelation of Jesus Christ; 14 as obedient children, not conforming yourselves to the former lusts, as in your ignorance; 15 but as He who called you is holy, you also be holy in all your conduct, 16 because it is written, "Be holy, for I am holy."`
-  },
-  {
-    id: 4,
-    type: 'scripture',
-    title: 'THEOLOGICAL VIRTUES - FAITH',
-    subtitle: 'Hebrews 11:1-16,32-40,(17-31 optional)',
-    content: `Hebrews 11:1-16,32-40,(17-31 optional)
+13 Therefore gird up the loins of your mind, be sober, and rest your hope fully upon the grace that is to be brought to you at the revelation of Jesus Christ; 14 as obedient children, not conforming yourselves to the former lusts, as in your ignorance; 15 but as He who called you is holy, you also be holy in all your conduct, 16 because it is written, "Be holy, for I am holy."$$, true);
+
+INSERT INTO passages (id, type, title, subtitle, introduction, content, is_public) VALUES
+(4, 'scripture', 'THEOLOGICAL VIRTUES - FAITH', 'Hebrews 11:1-16,32-40,(17-31 optional)', NULL, $$Hebrews 11:1-16,32-40,(17-31 optional)
 
 1 Now faith is the substance of things hoped for, the evidence of things not seen. 2 For by it the elders obtained a good testimony.
 
@@ -134,17 +119,12 @@ And lose the name of action.`
 
 Others were tortured, not accepting deliverance, that they might obtain a better resurrection. 36 Still others had trial of mockings and scourgings, yes, and of chains and imprisonment. 37 They were stoned, they were sawn in two, were tempted, were slain with the sword. They wandered about in sheepskins and goatskins, being destitute, afflicted, tormented— 38 of whom the world was not worthy. They wandered in deserts and mountains, in dens and caves of the earth.
 
-39 And all these, having obtained a good testimony through faith, did not receive the promise, 40 God having provided something better for us, that they should not be made perfect apart from us.`
-  },
-  {
-    id: 5,
-    type: 'poetry',
-    title: 'THE CARDINAL VIRTUES - JUSTICE',
-    subtitle: 'Hamlet Act 3, Scene 3',
-    introduction: `In this scene, Hamlet and Claudius separately consider the question of JUSTICE, or the Christian virtue of righteousness, and neither gets it very right. While Hamlet may be right to prudently consider whether he should be the instrument of earthly justice against his murderous uncle, he confuses this with his desire to see Claudius receive eternal justice in hell, and he fears this may not happen if he kills him while Claudius is confessing his sin to God.
+39 And all these, having obtained a good testimony through faith, did not receive the promise, 40 God having provided something better for us, that they should not be made perfect apart from us.$$, true);
 
-Claudius, on the other hand, seeks mercy and to escape justice, but seems to understand that this is not possible while he is unwilling to truly repent. While he is unaware of how this will play out despite Hamlet's difficulty in making himself the hand of transcendent judgement, he is correct that he will receive justice unmitigated by mercy if he will not repent during this short stay.`,
-    content: `Hamlet Act 3, Scene 3 [Form 4 plays the King, Claudius, uncle to Hamlet, Form 3 plays Hamlet]
+INSERT INTO passages (id, type, title, subtitle, introduction, content, is_public) VALUES
+(5, 'poetry', 'THE CARDINAL VIRTUES - JUSTICE', 'Hamlet Act 3, Scene 3', $$In this scene, Hamlet and Claudius separately consider the question of JUSTICE, or the Christian virtue of righteousness, and neither gets it very right. While Hamlet may be right to prudently consider whether he should be the instrument of earthly justice against his murderous uncle, he confuses this with his desire to see Claudius receive eternal justice in hell, and he fears this may not happen if he kills him while Claudius is confessing his sin to God.
+
+Claudius, on the other hand, seeks mercy and to escape justice, but seems to understand that this is not possible while he is unwilling to truly repent. While he is unaware of how this will play out despite Hamlet's difficulty in making himself the hand of transcendent judgement, he is correct that he will receive justice unmitigated by mercy if he will not repent during this short stay.$$, $$Hamlet Act 3, Scene 3 [Form 4 plays the King, Claudius, uncle to Hamlet, Form 3 plays Hamlet]
 
 KING
 O, my offense is rank, it smells to heaven;
@@ -220,19 +200,14 @@ Hamlet exits.
 KING, rising 
 My words fly up, my thoughts remain below;
 Words without thoughts never to heaven go.
-He exits.`
-  },
-  {
-    id: 6,
-    type: 'poetry',
-    title: 'THE CARDINAL VIRTUES - TEMPERANCE',
-    subtitle: 'Hamlet Act 3, Scene 2',
-    introduction: `TEMPERANCE, or self-control, is not a virtue in great evidence in Hamlet. In one earlier speech, Polonius gives advice to his son, Laertes, around this virtue like "give every man thy ear, but few this voice", but Polonius follows none of his own advice, and demonstrates with one foolish decision after another eventually leading to his death, that he is no temperate sage.
+He exits.$$, true);
+
+INSERT INTO passages (id, type, title, subtitle, introduction, content, is_public) VALUES
+(6, 'poetry', 'THE CARDINAL VIRTUES - TEMPERANCE', 'Hamlet Act 3, Scene 2', $$TEMPERANCE, or self-control, is not a virtue in great evidence in Hamlet. In one earlier speech, Polonius gives advice to his son, Laertes, around this virtue like "give every man thy ear, but few this voice", but Polonius follows none of his own advice, and demonstrates with one foolish decision after another eventually leading to his death, that he is no temperate sage.
 
 In this scene, Hamlet speaks to the actors ("players") he is using to sound out the guilt of his uncle about a very specific type of temperance that we are indeed practicing here and now, in this exordium, the self-control of one's voice and skills in communication through our act of a play in which an actor plays a director of actors and instructs them how to play this play within our play.
 
-So now, players, "split not the ears of the groundlings" but "be not too tame either".`,
-    content: `Hamlet Act 3, Scene 2
+So now, players, "split not the ears of the groundlings" but "be not too tame either".$$, $$Hamlet Act 3, Scene 2
 
 [Form 3 do these first 15 lines]
 HAMLET  Speak the speech, I pray you, as I pronounced
@@ -272,14 +247,10 @@ having th' accent of Christians nor the gait of
 Christian, pagan, nor man, have so strutted and
 bellowed that I have thought some of nature's
 journeymen had made men, and not made them
-well, they imitated humanity so abominably.`
-  },
-  {
-    id: 7,
-    type: 'poetry',
-    title: 'THE CARDINAL VIRTUES - FORTITUDE',
-    subtitle: 'Henry V, Act V, Scene 3',
-    introduction: `In Hamlet Act 4, Scene 4, we see Hamlet finally pricked to FORTITUDE, or the courage to do that which ought to be done when he witnesses the army of Fortinbras, prince of Norway, crossing Denmark in order to wager his life for a worthless "patch of land" in Poland. Spoiler alert, Fortinbras is going to come back this way and conquer Elsinore, the Danish king's castle at the very end of the play and find pretty much everyone dead when he arrives.
+well, they imitated humanity so abominably.$$, true);
+
+INSERT INTO passages (id, type, title, subtitle, introduction, content, is_public) VALUES
+(7, 'poetry', 'THE CARDINAL VIRTUES - FORTITUDE', 'Henry V, Act V, Scene 3', $$In Hamlet Act 4, Scene 4, we see Hamlet finally pricked to FORTITUDE, or the courage to do that which ought to be done when he witnesses the army of Fortinbras, prince of Norway, crossing Denmark in order to wager his life for a worthless "patch of land" in Poland. Spoiler alert, Fortinbras is going to come back this way and conquer Elsinore, the Danish king's castle at the very end of the play and find pretty much everyone dead when he arrives.
 
 Why yet I live to say "This thing's to do,"
 Sith I have cause, and will, and strength, and means
@@ -287,8 +258,7 @@ To do 't. Examples gross as Earth exhort me:
 […] O, from this time forth
 My thoughts be bloody or be nothing worth!
 
-But to end on a high note and give this manly virtue the example of one of Shakespeare's manliest speeches we shall now abandon Hamlet for the history play Henry V, Act V, Scene 3, as King Henry, after a chain of decisive actions now exhorts his men to conquer the French, who no doubt, always deserve what they get.`,
-    content: `Henry V, Act V, Scene 3
+But to end on a high note and give this manly virtue the example of one of Shakespeare's manliest speeches we shall now abandon Hamlet for the history play Henry V, Act V, Scene 3, as King Henry, after a chain of decisive actions now exhorts his men to conquer the French, who no doubt, always deserve what they get.$$, $$Henry V, Act V, Scene 3
 
 Once more unto the breach, dear friends, once more;
 Or close the wall up with our English dead!
@@ -328,15 +298,10 @@ Straining upon the start.
 
 The game's afoot:
 Follow your spirit; and upon this charge,
-Cry 'God for Harry! England! and Saint George!'`
-  },
-  {
-    id: 8,
-    type: 'scripture',
-    title: 'THE CARDINAL VIRTUES - FORTITUDE (Scripture)',
-    subtitle: 'Joshua 1',
-    introduction: `FORTITUDE [OPTIONAL, those tiring of Hamlet can choose this instead of the selection above.]`,
-    content: `Joshua 1
+Cry 'God for Harry! England! and Saint George!'$$, true);
+
+INSERT INTO passages (id, type, title, subtitle, introduction, content, is_public) VALUES
+(8, 'scripture', 'THE CARDINAL VIRTUES - FORTITUDE (Scripture)', 'Joshua 1', $$FORTITUDE [OPTIONAL, those tiring of Hamlet can choose this instead of the selection above.]$$, $$Joshua 1
 
 1 After the death of Moses the servant of the Lord, it came to pass that the Lord spoke to Joshua the son of Nun, Moses' assistant, saying: 
 2 "Moses My servant is dead. Now therefore, arise, go over this Jordan, you and all this people, to the land which I am giving to them—the children of Israel. 
@@ -344,6 +309,7 @@ Cry 'God for Harry! England! and Saint George!'`
 4 From the wilderness and this Lebanon as far as the great river, the River Euphrates, all the land of the Hittites, and to the Great Sea toward the going down of the sun, shall be your territory. 5 No man shall be able to stand before you all the days of your life; as I was with Moses, so I will be with you. I will not leave you nor forsake you. 
 6 Be strong and of good courage, for to this people you shall divide as an inheritance the land which I swore to their fathers to give them. 7 Only be strong and very courageous, that you may observe to do according to all the law which Moses My servant commanded you; do not turn from it to the right hand or to the left, that you may prosper wherever you go. 
 8 This Book of the Law shall not depart from your mouth, but you shall meditate in it day and night, that you may observe to do according to all that is written in it. For then you will make your way prosperous, and then you will have good success. 
-9 Have I not commanded you? Be strong and of good courage; do not be afraid, nor be dismayed, for the Lord your God is with you wherever you go."`
-  }
-]
+9 Have I not commanded you? Be strong and of good courage; do not be afraid, nor be dismayed, for the Lord your God is with you wherever you go."$$, true);
+
+-- Reset the sequence to continue from the highest ID
+SELECT setval('passages_id_seq', (SELECT MAX(id) FROM passages));
