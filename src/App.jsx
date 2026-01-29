@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './index.css'
 import { supabase } from './supabaseClient'
-import { PASSAGES } from './passages'
+import { PASSAGES as FALLBACK_PASSAGES } from './passages'
+import { PROGRAMS } from './programs'
 import {
   parseTextIntoTokens,
   removeOptionalSections,
@@ -31,6 +33,9 @@ import { ClozeWord } from './components/ClozeWord'
 import { PassageSelector } from './components/PassageSelector'
 
 function App() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('cloze_user')
     return saved ? JSON.parse(saved) : null
@@ -39,6 +44,7 @@ function App() {
   const [loginError, setLoginError] = useState('')
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
+  const [pendingProgramId, setPendingProgramId] = useState(null)
   
   const [selectedPassageId, setSelectedPassageId] = useState(1)
   const [showPassageSelector, setShowPassageSelector] = useState(false)
@@ -48,6 +54,17 @@ function App() {
   const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE)
   const [showFontControls, setShowFontControls] = useState(false)
   const [showIntroDialog, setShowIntroDialog] = useState(false)
+  const [selectedProgramId, setSelectedProgramId] = useState(null)
+  const [showProgramSelector, setShowProgramSelector] = useState(false)
+  const [showProgramView, setShowProgramView] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editContent, setEditContent] = useState('')
+  const [editTitle, setEditTitle] = useState('')
+  const [editSubtitle, setEditSubtitle] = useState('')
+  const [editIntro, setEditIntro] = useState('')
+  const [passages, setPassages] = useState(FALLBACK_PASSAGES)
+  const [passagesLoading, setPassagesLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
   
   const [text, setText] = useState(null)
   const [deletionPercentage, setDeletionPercentage] = useState(PERCENTAGE_STEP)
@@ -72,8 +89,17 @@ function App() {
   const textContainerRef = useRef(null)
 
   const selectedPassage = useMemo(() => {
-    return PASSAGES.find(p => p.id === selectedPassageId) || PASSAGES[0]
-  }, [selectedPassageId])
+    return passages.find(p => p.id === selectedPassageId) || passages[0]
+  }, [selectedPassageId, passages])
+
+  const selectedProgram = useMemo(() => {
+    return PROGRAMS.find(p => p.id === selectedProgramId) || null
+  }, [selectedProgramId])
+
+  const effectivePassageContent = useMemo(() => {
+    if (!selectedPassage) return ''
+    return selectedPassage.content
+  }, [selectedPassage])
 
   const passageHasOptional = useMemo(() => {
     return selectedPassage ? hasOptionalSections(selectedPassage.content) : false
@@ -81,14 +107,14 @@ function App() {
 
   const processedContent = useMemo(() => {
     if (!selectedPassage) return ''
-    let content = selectedPassage.content
+    let content = effectivePassageContent
     if (!includeOptional && !optionalExpanded) {
       content = removeOptionalSections(content)
     } else {
       content = stripOptionalMarkers(content)
     }
     return content
-  }, [selectedPassage, includeOptional, optionalExpanded])
+  }, [selectedPassage, effectivePassageContent, includeOptional, optionalExpanded])
 
   const tokens = useMemo(() => {
     if (!processedContent) return []
@@ -137,6 +163,28 @@ function App() {
   }, [verses, currentVerseIndex])
 
   useEffect(() => {
+    const path = location.pathname.slice(1)
+    if (path && PROGRAMS.some(p => p.id === path)) {
+      if (user) {
+        setSelectedProgramId(path)
+        setShowProgramView(true)
+        navigate('/', { replace: true })
+      } else {
+        setPendingProgramId(path)
+      }
+    }
+  }, [location.pathname, user, navigate])
+
+  useEffect(() => {
+    if (user && pendingProgramId) {
+      setSelectedProgramId(pendingProgramId)
+      setShowProgramView(true)
+      setPendingProgramId(null)
+      navigate('/', { replace: true })
+    }
+  }, [user, pendingProgramId, navigate])
+
+  useEffect(() => {
     if (!verseMode) return
     const interval = setInterval(() => {
       setNow(Date.now())
@@ -169,6 +217,49 @@ function App() {
   }
 
   useEffect(() => {
+    async function loadPassages() {
+      try {
+        const { data, error } = await supabase
+          .from('passages')
+          .select('*')
+          .eq('is_public', true)
+          .order('id')
+        if (error) throw error
+        if (data && data.length > 0) {
+          setPassages(data)
+        }
+      } catch (err) {
+        console.error('Failed to load passages, using fallback:', err)
+      } finally {
+        setPassagesLoading(false)
+      }
+    }
+    loadPassages()
+  }, [])
+
+  useEffect(() => {
+    async function checkAdmin() {
+      if (!user) {
+        setIsAdmin(false)
+        return
+      }
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('is_admin')
+          .eq('id', user.id)
+          .single()
+        if (error) throw error
+        setIsAdmin(data?.is_admin || false)
+      } catch (err) {
+        console.error('Failed to check admin status:', err)
+        setIsAdmin(false)
+      }
+    }
+    checkAdmin()
+  }, [user])
+
+  useEffect(() => {
     async function loadData() {
       if (!user) {
         setLoading(false)
@@ -182,7 +273,7 @@ function App() {
           .select('*')
           .eq('user_id', user.id)
           .eq('text_id', selectedPassageId)
-          .single()
+          .maybeSingle()
         
         if (progressData) {
           setDeletionPercentage(progressData.deletion_percentage)
@@ -205,7 +296,7 @@ function App() {
           .select('*')
           .eq('user_id', user.id)
           .eq('passage_id', selectedPassageId)
-          .single()
+          .maybeSingle()
         
         if (settingsData) {
           setFontFamily(settingsData.font_family || DEFAULT_FONT_FAMILY)
@@ -250,11 +341,11 @@ function App() {
   }, [user, loading, selectedPassageId, deletionPercentage, deletedIndices, verseProgress])
 
   useEffect(() => {
-    if (tokens.length > 0 && deletedIndices.length === 0) {
+    if (tokens.length > 0 && deletedIndices.length === 0 && !loading) {
       const indices = selectWordsToDelete(tokens, deletionPercentage, totalWords)
       setDeletedIndices(indices)
     }
-  }, [tokens, totalWords])
+  }, [tokens, totalWords, loading, deletionPercentage])
 
   useEffect(() => {
     if (!user || loading) return
@@ -525,9 +616,49 @@ function App() {
     localStorage.removeItem('cloze_user')
     setUser(null)
     setText(null)
-    setDeletedIndices([])
-    setVerseProgress({})
-    setLoading(true)
+  }
+
+  const handleStartEdit = () => {
+    if (!selectedPassage) return
+    setEditTitle(selectedPassage.title || '')
+    setEditSubtitle(selectedPassage.subtitle || '')
+    setEditIntro(selectedPassage.introduction || '')
+    setEditContent(selectedPassage.content || '')
+    setEditMode(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!selectedPassage || !isAdmin) return
+    try {
+      const { error } = await supabase
+        .from('passages')
+        .update({
+          title: editTitle,
+          subtitle: editSubtitle,
+          introduction: editIntro || null,
+          content: editContent
+        })
+        .eq('id', selectedPassageId)
+      if (error) throw error
+      setPassages(prev => prev.map(p => 
+        p.id === selectedPassageId 
+          ? { ...p, title: editTitle, subtitle: editSubtitle, introduction: editIntro || null, content: editContent }
+          : p
+      ))
+      setEditMode(false)
+      setDeletedIndices([])
+    } catch (err) {
+      console.error('Failed to save passage:', err)
+      alert('Failed to save changes. Please try again.')
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditMode(false)
+    setEditTitle('')
+    setEditSubtitle('')
+    setEditIntro('')
+    setEditContent('')
   }
 
   if (!user) {
@@ -614,7 +745,7 @@ function App() {
               </button>
             </div>
             <div className="space-y-4">
-              {PASSAGES.map(passage => (
+              {passages.map(passage => (
                 <button
                   key={passage.id}
                   onClick={() => {
@@ -659,6 +790,12 @@ function App() {
             <p className="text-sm text-gray-600">{selectedPassage?.subtitle}</p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowProgramSelector(true)}
+              className="px-3 py-1 text-sm bg-teal-500 text-white rounded hover:bg-teal-600 transition-colors"
+            >
+              Select Program
+            </button>
             <button
               onClick={() => setShowPassageSelector(true)}
               className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
@@ -705,7 +842,15 @@ function App() {
                     Intro
                   </button>
                 )}
-              </div>
+                {isAdmin && !editMode && (
+                  <button
+                    onClick={handleStartEdit}
+                    className="px-2 py-1 text-xs bg-amber-100 text-amber-700 rounded hover:bg-amber-200 transition-colors"
+                  >
+                    Edit
+                  </button>
+                )}
+                              </div>
             )}
             
             <div className="flex gap-2 ml-auto">
@@ -950,6 +1095,66 @@ function App() {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
+          {editMode ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-medium text-gray-700">Editing Passage</span>
+                <span className="text-xs text-gray-500">(Use **bold** and *italic* markdown formatting in content)</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>
+                  <input
+                    type="text"
+                    value={editSubtitle}
+                    onChange={(e) => setEditSubtitle(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Introduction (optional)</label>
+                <textarea
+                  value={editIntro}
+                  onChange={(e) => setEditIntro(e.target.value)}
+                  className="w-full h-24 p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Optional introduction text..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="w-full h-80 p-4 border border-gray-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  style={{ fontFamily: 'monospace' }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveEdit}
+                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
           <div 
             ref={textContainerRef}
             className="leading-relaxed whitespace-pre-wrap"
@@ -960,7 +1165,8 @@ function App() {
             {!includeOptional && passageHasOptional && !optionalExpanded ? (
               <>
                 {(() => {
-                  const parts = parseContentWithOptional(selectedPassage.content)
+                  const parts = parseContentWithOptional(effectivePassageContent)
+                  let globalWordIndex = 0
                   return parts.map((part, partIdx) => {
                     if (part.optional) {
                       return (
@@ -978,8 +1184,9 @@ function App() {
                     const partTokens = parseTextIntoTokens(part.content)
                     return partTokens.map((token, idx) => {
                       if (token.type === 'word') {
-                        const isDeletedByPercentage = deletedIndices.includes(token.wordIndex)
-                        const isDeletedByVerse = verseMode && isWordInCurrentVerse(token.wordIndex)
+                        const currentWordIndex = globalWordIndex++
+                        const isDeletedByPercentage = deletedIndices.includes(currentWordIndex)
+                        const isDeletedByVerse = verseMode && isWordInCurrentVerse(currentWordIndex)
                         const isDeleted = verseMode ? isDeletedByVerse : isDeletedByPercentage
                         return (
                           <ClozeWord
@@ -987,10 +1194,12 @@ function App() {
                             word={token.value}
                             isDeleted={isDeleted}
                             showAll={showAll}
-                            isRevealed={isWordRevealed(token.wordIndex)}
+                            isRevealed={isWordRevealed(currentWordIndex)}
                             wordRef={(el) => {
-                              if (el) wordRefsMap.current.set(token.wordIndex, el)
+                              if (el) wordRefsMap.current.set(currentWordIndex, el)
                             }}
+                            bold={token.bold}
+                            italic={token.italic}
                           />
                         )
                       }
@@ -1015,6 +1224,8 @@ function App() {
                       wordRef={(el) => {
                         if (el) wordRefsMap.current.set(token.wordIndex, el)
                       }}
+                      bold={token.bold}
+                      italic={token.italic}
                     />
                   )
                 }
@@ -1030,6 +1241,7 @@ function App() {
               </button>
             )}
           </div>
+          )}
         </div>
       </div>
       
@@ -1060,6 +1272,102 @@ function App() {
               <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
                 {selectedPassage.introduction}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showProgramSelector && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setShowProgramSelector(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-xl font-semibold text-gray-800">Select Program</h2>
+                <button
+                  onClick={() => setShowProgramSelector(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="space-y-3">
+                {PROGRAMS.map(program => (
+                  <button
+                    key={program.id}
+                    onClick={() => {
+                      setSelectedProgramId(program.id)
+                      setShowProgramSelector(false)
+                      setShowProgramView(true)
+                    }}
+                    className="w-full text-left p-4 border rounded-lg hover:bg-teal-50 hover:border-teal-300 transition-colors"
+                  >
+                    <span className="font-medium text-gray-800">{program.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showProgramView && selectedProgram && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setShowProgramView(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-xl font-semibold text-gray-800">{selectedProgram.name}</h2>
+                <button
+                  onClick={() => setShowProgramView(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="mb-6">
+                <h3 className="font-medium text-gray-700 mb-3">Passages</h3>
+                <div className="space-y-2">
+                  {selectedProgram.passages.map(({ passageId, dueDateDisplay, optional }) => {
+                    const passage = passages.find(p => p.id === passageId)
+                    if (!passage) return null
+                    return (
+                      <button
+                        key={passageId}
+                        onClick={() => {
+                          setSelectedPassageId(passageId)
+                          setShowProgramView(false)
+                        }}
+                        className="w-full text-left p-3 border rounded-lg hover:bg-purple-50 hover:border-purple-300 transition-colors flex justify-between items-center"
+                      >
+                        <div>
+                          <span className="font-medium text-gray-800">{passage.title}</span>
+                          {optional && <span className="ml-2 text-xs text-gray-500 italic">(Optional)</span>}
+                          <p className="text-sm text-gray-500">{passage.subtitle}</p>
+                        </div>
+                        <span className="text-sm text-teal-600 font-medium">Due: {dueDateDisplay}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              
+              <div className="border-t pt-4">
+                <p className="text-gray-700 leading-relaxed whitespace-pre-wrap text-sm">
+                  {selectedProgram.introduction}
+                </p>
+              </div>
             </div>
           </div>
         </div>

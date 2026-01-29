@@ -10,9 +10,9 @@ describe('parseTextIntoTokens', () => {
   it('parses simple text into word and other tokens', () => {
     const tokens = parseTextIntoTokens('Hello, world!')
     expect(tokens).toHaveLength(4)
-    expect(tokens[0]).toEqual({ type: 'word', value: 'Hello', wordIndex: 0 })
+    expect(tokens[0]).toEqual({ type: 'word', value: 'Hello', wordIndex: 0, bold: false, italic: false })
     expect(tokens[1]).toEqual({ type: 'other', value: ', ' })
-    expect(tokens[2]).toEqual({ type: 'word', value: 'world', wordIndex: 1 })
+    expect(tokens[2]).toEqual({ type: 'word', value: 'world', wordIndex: 1, bold: false, italic: false })
     expect(tokens[3]).toEqual({ type: 'other', value: '!' })
   })
 
@@ -31,6 +31,22 @@ describe('parseTextIntoTokens', () => {
     expect(words[0].wordIndex).toBe(0)
     expect(words[1].wordIndex).toBe(1)
     expect(words[2].wordIndex).toBe(2)
+  })
+
+  it('detects bold markdown styling', () => {
+    const tokens = parseTextIntoTokens('normal **bold** text')
+    const words = tokens.filter(t => t.type === 'word')
+    expect(words[0].bold).toBe(false)
+    expect(words[1].bold).toBe(true)
+    expect(words[2].bold).toBe(false)
+  })
+
+  it('detects italic markdown styling', () => {
+    const tokens = parseTextIntoTokens('normal *italic* text')
+    const words = tokens.filter(t => t.type === 'word')
+    expect(words[0].italic).toBe(false)
+    expect(words[1].italic).toBe(true)
+    expect(words[2].italic).toBe(false)
   })
 })
 

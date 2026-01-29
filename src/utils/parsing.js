@@ -7,20 +7,102 @@ export const OPTIONAL_CLOSE = '[/OPTIONAL]'
 const OPTIONAL_REGEX = /\[OPTIONAL\][\s\S]*?\[\/OPTIONAL\]/g
 const OPTIONAL_CAPTURE_REGEX = /\[OPTIONAL\]([\s\S]*?)\[\/OPTIONAL\]/g
 
+export function stripMarkdown(text) {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+}
+
 /**
- * Parse text into tokens (words and non-words)
+ * Parse text into tokens (words and non-words) with markdown styling
  * @param {string} text - The text to parse
- * @returns {Array<{type: 'word'|'other', value: string, wordIndex?: number}>}
+ * @returns {Array<{type: 'word'|'other', value: string, wordIndex?: number, bold?: boolean, italic?: boolean}>}
  */
 export function parseTextIntoTokens(text) {
   const tokens = []
-  const regex = /([a-zA-Z]+(?:'[a-zA-Z]+)?)|([^a-zA-Z]+)/g
-  let match
   let wordIndex = 0
+  let currentPos = 0
   
-  while ((match = regex.exec(text)) !== null) {
+  const boldRanges = []
+  const italicRanges = []
+  let cleanText = text
+  
+  let match
+  const boldRegex = /\*\*([^*]+)\*\*/g
+  while ((match = boldRegex.exec(text)) !== null) {
+    const start = match.index
+    const content = match[1]
+    boldRanges.push({ start, end: start + match[0].length, content })
+  }
+  
+  const italicRegex = /(?<!\*)\*([^*]+)\*(?!\*)/g
+  while ((match = italicRegex.exec(text)) !== null) {
+    const start = match.index
+    const content = match[1]
+    italicRanges.push({ start, end: start + match[0].length, content })
+  }
+  
+  cleanText = stripMarkdown(text)
+  
+  const isInRange = (charIndex, ranges, originalText) => {
+    let offset = 0
+    for (const range of ranges) {
+      const markersBefore = originalText.slice(0, range.start).replace(/\*+/g, '').length
+      const cleanStart = markersBefore
+      const cleanEnd = cleanStart + range.content.length
+      if (charIndex >= cleanStart && charIndex < cleanEnd) return true
+    }
+    return false
+  }
+  
+  const getStyleAtPosition = (pos) => {
+    let bold = false, italic = false
+    let origPos = 0, cleanPos = 0
+    
+    for (let i = 0; i < text.length && cleanPos <= pos; i++) {
+      if (text.slice(i, i + 2) === '**') {
+        i++
+        continue
+      }
+      if (text[i] === '*') continue
+      if (cleanPos === pos) {
+        let depth = 0
+        for (let j = 0; j < i; j++) {
+          if (text.slice(j, j + 2) === '**') {
+            depth++
+            j++
+          }
+        }
+        bold = depth % 2 === 1
+        
+        let italicDepth = 0
+        for (let j = 0; j < i; j++) {
+          if (text[j] === '*' && text[j-1] !== '*' && text[j+1] !== '*') {
+            italicDepth++
+          }
+        }
+        italic = italicDepth % 2 === 1
+        break
+      }
+      cleanPos++
+    }
+    return { bold, italic }
+  }
+  
+  const tokenRegex = /([a-zA-Z]+(?:'[a-zA-Z]+)?)|([^a-zA-Z]+)/g
+  let charIndex = 0
+  
+  while ((match = tokenRegex.exec(cleanText)) !== null) {
+    const startChar = match.index
     if (match[1]) {
-      tokens.push({ type: 'word', value: match[1], wordIndex: wordIndex++ })
+      const style = getStyleAtPosition(startChar)
+      tokens.push({ 
+        type: 'word', 
+        value: match[1], 
+        wordIndex: wordIndex++,
+        bold: style.bold,
+        italic: style.italic
+      })
     } else {
       tokens.push({ type: 'other', value: match[2] })
     }

@@ -3,8 +3,9 @@ import { useState } from 'react'
 /**
  * A word in the cloze deletion display
  * Shows hidden words as blanks, reveals on hover or when revealed
+ * Supports bold and italic markdown styling
  */
-export function ClozeWord({ word, isDeleted, showAll, isRevealed, wordRef }) {
+export function ClozeWord({ word, isDeleted, showAll, isRevealed, wordRef, bold, italic }) {
   const [isHovered, setIsHovered] = useState(false)
   
   const getStateClasses = () => {
@@ -13,8 +14,15 @@ export function ClozeWord({ word, isDeleted, showAll, isRevealed, wordRef }) {
     return ''
   }
   
+  const getStyleClasses = () => {
+    let classes = ''
+    if (bold) classes += 'font-bold '
+    if (italic) classes += 'italic '
+    return classes.trim()
+  }
+  
   if (!isDeleted) {
-    return <span ref={wordRef}>{word}</span>
+    return <span ref={wordRef} className={getStyleClasses()}>{word}</span>
   }
   
   const revealed = showAll || isRevealed || isHovered
@@ -22,7 +30,7 @@ export function ClozeWord({ word, isDeleted, showAll, isRevealed, wordRef }) {
   return (
     <span
       ref={wordRef}
-      className={`inline-block px-1 rounded cursor-pointer transition-colors duration-200 relative ${getStateClasses()}`}
+      className={`inline-block px-1 rounded cursor-pointer transition-colors duration-200 relative ${getStateClasses()} ${getStyleClasses()}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
