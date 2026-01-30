@@ -33,6 +33,8 @@ import { ClozeWord } from './components/ClozeWord'
 import { PassageSelector } from './components/PassageSelector'
 import { trackSessionStart, trackPageView, trackLogin, trackRegistration } from './utils/analytics'
 import AdminDashboard from './components/AdminDashboard'
+import UploadPassageModal from './components/UploadPassageModal'
+import MySelectionsProgram from './components/MySelectionsProgram'
 
 function App() {
   const location = useLocation()
@@ -100,6 +102,10 @@ function App() {
   const [passages, setPassages] = useState(FALLBACK_PASSAGES)
   const [passagesLoading, setPassagesLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [userPassages, setUserPassages] = useState([])
+  const [userProgram, setUserProgram] = useState([])
+  const [showMySelections, setShowMySelections] = useState(false)
   
   const [text, setText] = useState(null)
   const [deletionPercentage, setDeletionPercentage] = useState(PERCENTAGE_STEP)
@@ -246,14 +252,39 @@ function App() {
   useEffect(() => {
     async function loadPassages() {
       try {
-        const { data, error } = await supabase
+        const { data: globalPassages, error: globalError } = await supabase
           .from('passages')
           .select('*')
-          .eq('is_public', true)
+          .eq('is_global', true)
           .order('id')
-        if (error) throw error
-        if (data && data.length > 0) {
-          setPassages(data)
+        if (globalError) throw globalError
+
+        let userOwnPassages = []
+        if (user) {
+          const { data: userData, error: userError } = await supabase
+            .from('passages')
+            .select('*')
+            .eq('created_by', user.id)
+            .eq('is_global', false)
+            .order('id')
+          if (!userError && userData) {
+            userOwnPassages = userData
+            setUserPassages(userData)
+          }
+
+          const { data: programData } = await supabase
+            .from('user_programs')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('sort_order')
+          if (programData) {
+            setUserProgram(programData)
+          }
+        }
+
+        const allPassages = [...(globalPassages || []), ...userOwnPassages]
+        if (allPassages.length > 0) {
+          setPassages(allPassages)
         }
       } catch (err) {
         console.error('Failed to load passages, using fallback:', err)
@@ -262,7 +293,7 @@ function App() {
       }
     }
     loadPassages()
-  }, [])
+  }, [user])
 
   useEffect(() => {
     async function checkAdmin() {
@@ -709,8 +740,58 @@ function App() {
     setEditMode(true)
   }
 
+  const canEditPassage = selectedPassage && (isAdmin || (user && selectedPassage.created_by === user.id && !selectedPassage.is_global))
+
+  const handleUploadPassage = async (passageData) => {
+    if (!user) throw new Error('Must be logged in to upload')
+    if (userPassages.length >= 20) throw new Error('Maximum 20 passages reached')
+
+    const { data, error } = await supabase
+      .from('passages')
+      .insert({
+        ...passageData,
+        created_by: user.id,
+        is_public: false,
+        is_global: false
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    setPassages(prev => [...prev, data])
+    setUserPassages(prev => [...prev, data])
+    return data
+  }
+
+  const handleDeletePassage = async (passageId) => {
+    if (!user) return
+    const passage = passages.find(p => p.id === passageId)
+    if (!passage || (passage.is_global && !isAdmin)) return
+    if (!passage.is_global && passage.created_by !== user.id && !isAdmin) return
+
+    if (!confirm('Are you sure you want to delete this passage?')) return
+
+    try {
+      const { error } = await supabase
+        .from('passages')
+        .delete()
+        .eq('id', passageId)
+      if (error) throw error
+
+      setPassages(prev => prev.filter(p => p.id !== passageId))
+      setUserPassages(prev => prev.filter(p => p.id !== passageId))
+      if (selectedPassageId === passageId) {
+        setSelectedPassageId(passages[0]?.id || 1)
+      }
+    } catch (err) {
+      console.error('Failed to delete passage:', err)
+      alert('Failed to delete passage')
+    }
+  }
+
   const handleSaveEdit = async () => {
-    if (!selectedPassage || !isAdmin) return
+    if (!selectedPassage || !canEditPassage) return
     try {
       const { error } = await supabase
         .from('passages')
@@ -790,6 +871,11 @@ function App() {
                     }`}>
                       {passage.type}
                     </span>
+                    {!passage.is_global && (
+                      <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700">
+                        My Upload
+                      </span>
+                    )}
                     {selectedPassageId === passage.id && (
                       <span className="text-blue-500 text-sm">✓ Selected</span>
                     )}
@@ -825,6 +911,26 @@ function App() {
             >
               Select Passage
             </button>
+            {user ? (
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+              >
+                Upload Passage
+              </button>
+            ) : (
+              <div className="relative group">
+                <button
+                  disabled
+                  className="px-3 py-1 text-sm bg-gray-300 text-gray-500 rounded cursor-not-allowed"
+                >
+                  Upload Passage
+                </button>
+                <div className="absolute right-0 top-8 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                  Register and sign in to upload your own memory selections
+                </div>
+              </div>
+            )}
             {user && <span className="text-sm text-gray-600">Hi, {user.username}</span>}
             {isAdmin && (
               <button
@@ -887,7 +993,7 @@ function App() {
                     Intro
                   </button>
                 )}
-                {isAdmin && !editMode && (
+                {canEditPassage && !editMode && (
                   <button
                     onClick={handleStartEdit}
                     className="px-2 py-1 text-xs bg-amber-100 text-amber-700 rounded hover:bg-amber-200 transition-colors"
@@ -1355,6 +1461,18 @@ function App() {
                     <span className="font-medium text-gray-800">{program.name}</span>
                   </button>
                 ))}
+                {user && (
+                  <button
+                    onClick={() => {
+                      setShowProgramSelector(false)
+                      setShowMySelections(true)
+                    }}
+                    className="w-full text-left p-4 border-2 border-dashed border-green-300 rounded-lg hover:bg-green-50 hover:border-green-400 transition-colors"
+                  >
+                    <span className="font-medium text-green-700">My Own Selections</span>
+                    <span className="text-sm text-green-600 ml-2">({userPassages.length} passages)</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1500,6 +1618,30 @@ function App() {
 
       {showAdminDashboard && (
         <AdminDashboard onClose={() => setShowAdminDashboard(false)} />
+      )}
+
+      {showUploadModal && (
+        <UploadPassageModal
+          onClose={() => setShowUploadModal(false)}
+          onUpload={handleUploadPassage}
+          userPassageCount={userPassages.length}
+        />
+      )}
+
+      {showMySelections && (
+        <MySelectionsProgram
+          user={user}
+          userPassages={userPassages}
+          userProgram={userProgram}
+          setUserProgram={setUserProgram}
+          passages={passages}
+          onSelectPassage={(passageId) => {
+            setSelectedPassageId(passageId)
+            setLoading(true)
+            setDeletedIndices([])
+          }}
+          onClose={() => setShowMySelections(false)}
+        />
       )}
     </div>
   )
