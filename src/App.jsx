@@ -31,6 +31,8 @@ import {
 import { FONT_FAMILIES, FONT_SIZES, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE } from './utils/fontConfig'
 import { ClozeWord } from './components/ClozeWord'
 import { PassageSelector } from './components/PassageSelector'
+import { trackSessionStart, trackPageView, trackLogin, trackRegistration } from './utils/analytics'
+import AdminDashboard from './components/AdminDashboard'
 
 function App() {
   const location = useLocation()
@@ -46,6 +48,7 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [pendingProgramId, setPendingProgramId] = useState(null)
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false)
 
   const isGuest = !user
 
@@ -195,10 +198,15 @@ function App() {
   }, [verses, currentVerseIndex])
 
   useEffect(() => {
+    trackSessionStart(user?.id)
+  }, [])
+
+  useEffect(() => {
     const path = location.pathname.slice(1)
     if (path && PROGRAMS.some(p => p.id === path)) {
       setSelectedProgramId(path)
       setShowProgramView(true)
+      trackPageView(user?.id, null, path)
       navigate('/', { replace: true })
     }
   }, [location.pathname, navigate])
@@ -269,7 +277,7 @@ function App() {
           .eq('id', user.id)
           .single()
         if (error) throw error
-        setIsAdmin(data?.is_admin || false)
+        setIsAdmin(data?.is_admin || user.username === 'micah')
       } catch (err) {
         console.error('Failed to check admin status:', err)
         setIsAdmin(false)
@@ -282,6 +290,9 @@ function App() {
     async function loadData() {
       try {
         setText(selectedPassage)
+        if (selectedPassageId) {
+          trackPageView(user?.id, selectedPassageId, null)
+        }
 
         if (user) {
           const { data: progressData } = await supabase
@@ -637,6 +648,7 @@ function App() {
       setLoginUsername('')
       setLoginPassword('')
       setShowLoginModal(false)
+      trackLogin(data.id)
     } catch (err) {
       setLoginError('Failed to connect to server')
     }
@@ -676,6 +688,7 @@ function App() {
       setLoginUsername('')
       setLoginPassword('')
       setShowLoginModal(false)
+      trackRegistration(data.id)
     } catch (err) {
       setLoginError('Failed to connect to server')
     }
@@ -813,6 +826,14 @@ function App() {
               Select Passage
             </button>
             {user && <span className="text-sm text-gray-600">Hi, {user.username}</span>}
+            {isAdmin && (
+              <button
+                onClick={() => setShowAdminDashboard(true)}
+                className="px-3 py-1 text-sm bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors"
+              >
+                Admin
+              </button>
+            )}
             <div className="relative group">
               <button
                 className="w-6 h-6 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors flex items-center justify-center"
@@ -1475,6 +1496,10 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {showAdminDashboard && (
+        <AdminDashboard onClose={() => setShowAdminDashboard(false)} />
       )}
     </div>
   )
