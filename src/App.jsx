@@ -302,9 +302,12 @@ function App() {
             }
           } else {
             setDeletionPercentage(PERCENTAGE_STEP)
-            setDeletedIndices([])
             setVerseProgress({})
             setVerseMode(false)
+            const initialTokens = parseTextIntoTokens(selectedPassage?.content ? removeOptionalSections(selectedPassage.content) : '')
+            const initialTotalWords = initialTokens.filter(t => t.type === 'word').length
+            const initialIndices = selectWordsToDelete(initialTokens, PERCENTAGE_STEP, initialTotalWords)
+            setDeletedIndices(initialIndices)
           }
 
           const { data: settingsData } = await supabase
@@ -336,9 +339,12 @@ function App() {
             }
           } else {
             setDeletionPercentage(PERCENTAGE_STEP)
-            setDeletedIndices([])
             setVerseProgress({})
             setVerseMode(false)
+            const initialTokens = parseTextIntoTokens(selectedPassage?.content ? removeOptionalSections(selectedPassage.content) : '')
+            const initialTotalWords = initialTokens.filter(t => t.type === 'word').length
+            const initialIndices = selectWordsToDelete(initialTokens, PERCENTAGE_STEP, initialTotalWords)
+            setDeletedIndices(initialIndices)
           }
 
           const guestSettings = loadGuestSettings(selectedPassageId)
