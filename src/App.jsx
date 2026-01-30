@@ -45,6 +45,38 @@ function App() {
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [pendingProgramId, setPendingProgramId] = useState(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+
+  const isGuest = !user
+
+  const getGuestProgressKey = (passageId) => `cloze_guest_progress_${passageId}`
+  const getGuestSettingsKey = (passageId) => `cloze_guest_settings_${passageId}`
+
+  const loadGuestProgress = (passageId) => {
+    try {
+      const saved = localStorage.getItem(getGuestProgressKey(passageId))
+      return saved ? JSON.parse(saved) : null
+    } catch { return null }
+  }
+
+  const saveGuestProgress = (passageId, data) => {
+    try {
+      localStorage.setItem(getGuestProgressKey(passageId), JSON.stringify(data))
+    } catch (err) { console.error('Failed to save guest progress:', err) }
+  }
+
+  const loadGuestSettings = (passageId) => {
+    try {
+      const saved = localStorage.getItem(getGuestSettingsKey(passageId))
+      return saved ? JSON.parse(saved) : null
+    } catch { return null }
+  }
+
+  const saveGuestSettings = (passageId, data) => {
+    try {
+      localStorage.setItem(getGuestSettingsKey(passageId), JSON.stringify(data))
+    } catch (err) { console.error('Failed to save guest settings:', err) }
+  }
   
   const [selectedPassageId, setSelectedPassageId] = useState(1)
   const [showPassageSelector, setShowPassageSelector] = useState(false)
@@ -165,24 +197,11 @@ function App() {
   useEffect(() => {
     const path = location.pathname.slice(1)
     if (path && PROGRAMS.some(p => p.id === path)) {
-      if (user) {
-        setSelectedProgramId(path)
-        setShowProgramView(true)
-        navigate('/', { replace: true })
-      } else {
-        setPendingProgramId(path)
-      }
-    }
-  }, [location.pathname, user, navigate])
-
-  useEffect(() => {
-    if (user && pendingProgramId) {
-      setSelectedProgramId(pendingProgramId)
+      setSelectedProgramId(path)
       setShowProgramView(true)
-      setPendingProgramId(null)
       navigate('/', { replace: true })
     }
-  }, [user, pendingProgramId, navigate])
+  }, [location.pathname, navigate])
 
   useEffect(() => {
     if (!verseMode) return
@@ -261,51 +280,83 @@ function App() {
 
   useEffect(() => {
     async function loadData() {
-      if (!user) {
-        setLoading(false)
-        return
-      }
       try {
         setText(selectedPassage)
 
-        const { data: progressData } = await supabase
-          .from('progress')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('text_id', selectedPassageId)
-          .maybeSingle()
-        
-        if (progressData) {
-          setDeletionPercentage(progressData.deletion_percentage)
-          setDeletedIndices(progressData.deleted_indices || [])
-          if (progressData.verse_progress) {
-            setVerseProgress(progressData.verse_progress)
+        if (user) {
+          const { data: progressData } = await supabase
+            .from('progress')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('text_id', selectedPassageId)
+            .maybeSingle()
+          
+          if (progressData) {
+            setDeletionPercentage(progressData.deletion_percentage)
+            setDeletedIndices(progressData.deleted_indices || [])
+            if (progressData.verse_progress) {
+              setVerseProgress(progressData.verse_progress)
+            }
+            if (progressData.deletion_percentage >= VERSE_MODE_THRESHOLD) {
+              setVerseMode(true)
+            }
+          } else {
+            setDeletionPercentage(PERCENTAGE_STEP)
+            setVerseProgress({})
+            setVerseMode(false)
+            const initialTokens = parseTextIntoTokens(selectedPassage?.content ? removeOptionalSections(selectedPassage.content) : '')
+            const initialTotalWords = initialTokens.filter(t => t.type === 'word').length
+            const initialIndices = selectWordsToDelete(initialTokens, PERCENTAGE_STEP, initialTotalWords)
+            setDeletedIndices(initialIndices)
           }
-          if (progressData.deletion_percentage >= VERSE_MODE_THRESHOLD) {
-            setVerseMode(true)
-          }
-        } else {
-          setDeletionPercentage(PERCENTAGE_STEP)
-          setDeletedIndices([])
-          setVerseProgress({})
-          setVerseMode(false)
-        }
 
-        const { data: settingsData } = await supabase
-          .from('user_passage_settings')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('passage_id', selectedPassageId)
-          .maybeSingle()
-        
-        if (settingsData) {
-          setFontFamily(settingsData.font_family || DEFAULT_FONT_FAMILY)
-          setFontSize(settingsData.font_size || DEFAULT_FONT_SIZE)
-          setIncludeOptional(settingsData.include_optional !== false)
+          const { data: settingsData } = await supabase
+            .from('user_passage_settings')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('passage_id', selectedPassageId)
+            .maybeSingle()
+          
+          if (settingsData) {
+            setFontFamily(settingsData.font_family || DEFAULT_FONT_FAMILY)
+            setFontSize(settingsData.font_size || DEFAULT_FONT_SIZE)
+            setIncludeOptional(settingsData.include_optional !== false)
+          } else {
+            setFontFamily(DEFAULT_FONT_FAMILY)
+            setFontSize(DEFAULT_FONT_SIZE)
+            setIncludeOptional(true)
+          }
         } else {
-          setFontFamily(DEFAULT_FONT_FAMILY)
-          setFontSize(DEFAULT_FONT_SIZE)
-          setIncludeOptional(true)
+          const guestProgress = loadGuestProgress(selectedPassageId)
+          if (guestProgress) {
+            setDeletionPercentage(guestProgress.deletion_percentage)
+            setDeletedIndices(guestProgress.deleted_indices || [])
+            if (guestProgress.verse_progress) {
+              setVerseProgress(guestProgress.verse_progress)
+            }
+            if (guestProgress.deletion_percentage >= VERSE_MODE_THRESHOLD) {
+              setVerseMode(true)
+            }
+          } else {
+            setDeletionPercentage(PERCENTAGE_STEP)
+            setVerseProgress({})
+            setVerseMode(false)
+            const initialTokens = parseTextIntoTokens(selectedPassage?.content ? removeOptionalSections(selectedPassage.content) : '')
+            const initialTotalWords = initialTokens.filter(t => t.type === 'word').length
+            const initialIndices = selectWordsToDelete(initialTokens, PERCENTAGE_STEP, initialTotalWords)
+            setDeletedIndices(initialIndices)
+          }
+
+          const guestSettings = loadGuestSettings(selectedPassageId)
+          if (guestSettings) {
+            setFontFamily(guestSettings.font_family || DEFAULT_FONT_FAMILY)
+            setFontSize(guestSettings.font_size || DEFAULT_FONT_SIZE)
+            setIncludeOptional(guestSettings.include_optional !== false)
+          } else {
+            setFontFamily(DEFAULT_FONT_FAMILY)
+            setFontSize(DEFAULT_FONT_SIZE)
+            setIncludeOptional(true)
+          }
         }
         setOptionalExpanded(false)
       } catch (err) {
@@ -318,22 +369,30 @@ function App() {
   }, [selectedPassageId, selectedPassage, user])
 
   useEffect(() => {
-    if (!user || loading) return
+    if (loading) return
     if (deletedIndices.length === 0) return
     
     const saveTimeout = setTimeout(async () => {
-      try {
-        await supabase
-          .from('progress')
-          .upsert({
-            user_id: user.id,
-            text_id: selectedPassageId,
-            deletion_percentage: deletionPercentage,
-            deleted_indices: deletedIndices,
-            verse_progress: verseProgress
-          }, { onConflict: 'user_id,text_id' })
-      } catch (err) {
-        console.error('Failed to auto-save progress:', err)
+      if (user) {
+        try {
+          await supabase
+            .from('progress')
+            .upsert({
+              user_id: user.id,
+              text_id: selectedPassageId,
+              deletion_percentage: deletionPercentage,
+              deleted_indices: deletedIndices,
+              verse_progress: verseProgress
+            }, { onConflict: 'user_id,text_id' })
+        } catch (err) {
+          console.error('Failed to auto-save progress:', err)
+        }
+      } else {
+        saveGuestProgress(selectedPassageId, {
+          deletion_percentage: deletionPercentage,
+          deleted_indices: deletedIndices,
+          verse_progress: verseProgress
+        })
       }
     }, 500)
     
@@ -348,21 +407,29 @@ function App() {
   }, [tokens, totalWords, loading, deletionPercentage])
 
   useEffect(() => {
-    if (!user || loading) return
+    if (loading) return
     
     const saveTimeout = setTimeout(async () => {
-      try {
-        await supabase
-          .from('user_passage_settings')
-          .upsert({
-            user_id: user.id,
-            passage_id: selectedPassageId,
-            font_family: fontFamily,
-            font_size: fontSize,
-            include_optional: includeOptional
-          }, { onConflict: 'user_id,passage_id' })
-      } catch (err) {
-        console.error('Failed to save settings:', err)
+      if (user) {
+        try {
+          await supabase
+            .from('user_passage_settings')
+            .upsert({
+              user_id: user.id,
+              passage_id: selectedPassageId,
+              font_family: fontFamily,
+              font_size: fontSize,
+              include_optional: includeOptional
+            }, { onConflict: 'user_id,passage_id' })
+        } catch (err) {
+          console.error('Failed to save settings:', err)
+        }
+      } else {
+        saveGuestSettings(selectedPassageId, {
+          font_family: fontFamily,
+          font_size: fontSize,
+          include_optional: includeOptional
+        })
       }
     }, 500)
     
@@ -569,6 +636,7 @@ function App() {
       setUser(data)
       setLoginUsername('')
       setLoginPassword('')
+      setShowLoginModal(false)
     } catch (err) {
       setLoginError('Failed to connect to server')
     }
@@ -607,6 +675,7 @@ function App() {
       setUser(data)
       setLoginUsername('')
       setLoginPassword('')
+      setShowLoginModal(false)
     } catch (err) {
       setLoginError('Failed to connect to server')
     }
@@ -659,65 +728,6 @@ function App() {
     setEditSubtitle('')
     setEditIntro('')
     setEditContent('')
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-md p-8 w-full max-w-md">
-          <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">Cloze Practice</h1>
-          <div className="flex gap-2 mb-4" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              tabIndex={0}
-              aria-selected={loginMode === 'login'}
-              onClick={() => setLoginMode('login')}
-              className={`flex-1 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${loginMode === 'login' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              role="tab"
-              tabIndex={0}
-              aria-selected={loginMode === 'register'}
-              onClick={() => setLoginMode('register')}
-              className={`flex-1 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${loginMode === 'register' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-            >
-              Register
-            </button>
-          </div>
-          <form onSubmit={loginMode === 'login' ? handleLogin : handleRegister}>
-            <input
-              type="text"
-              placeholder="Username"
-              value={loginUsername}
-              onChange={(e) => setLoginUsername(e.target.value)}
-              tabIndex={0}
-              autoFocus
-              className="w-full px-4 py-2 border border-gray-300 rounded mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={loginPassword}
-              onChange={(e) => setLoginPassword(e.target.value)}
-              tabIndex={0}
-              className="w-full px-4 py-2 border border-gray-300 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {loginError && <p className="text-red-500 text-sm mb-3" role="alert">{loginError}</p>}
-            <button
-              type="submit"
-              tabIndex={0}
-              className="w-full py-2 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-            >
-              {loginMode === 'login' ? 'Login' : 'Register'}
-            </button>
-          </form>
-        </div>
-      </div>
-    )
   }
 
   if (loading) {
@@ -802,7 +812,7 @@ function App() {
             >
               Select Passage
             </button>
-            <span className="text-sm text-gray-600">Hi, {user.username}</span>
+            {user && <span className="text-sm text-gray-600">Hi, {user.username}</span>}
             <div className="relative group">
               <button
                 className="w-6 h-6 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors flex items-center justify-center"
@@ -818,12 +828,26 @@ function App() {
                 <p className="italic text-gray-400">-- Very much in beta!</p>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-            >
-              Logout
-            </button>
+            {user ? (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+              >
+                Logout
+              </button>
+            ) : (
+              <div className="relative group">
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                >
+                  Login
+                </button>
+                <div className="absolute right-0 top-8 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                  Register and login to save settings and progress
+                </div>
+              </div>
+            )}
           </div>
         </div>
         
@@ -1368,6 +1392,86 @@ function App() {
                   {selectedProgram.introduction}
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLoginModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setShowLoginModal(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-8">
+              <div className="flex justify-between items-start mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">hypermemo</h2>
+                <button
+                  onClick={() => setShowLoginModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="flex gap-2 mb-4" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  tabIndex={0}
+                  aria-selected={loginMode === 'login'}
+                  onClick={() => setLoginMode('login')}
+                  className={`flex-1 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${loginMode === 'login' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  tabIndex={0}
+                  aria-selected={loginMode === 'register'}
+                  onClick={() => setLoginMode('register')}
+                  className={`flex-1 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${loginMode === 'register' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                >
+                  Register
+                </button>
+              </div>
+              <form onSubmit={(e) => {
+                e.preventDefault()
+                if (loginMode === 'login') {
+                  handleLogin(e)
+                } else {
+                  handleRegister(e)
+                }
+              }}>
+                <input
+                  type="text"
+                  placeholder="Username"
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  tabIndex={0}
+                  autoFocus
+                  className="w-full px-4 py-2 border border-gray-300 rounded mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  tabIndex={0}
+                  className="w-full px-4 py-2 border border-gray-300 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {loginError && <p className="text-red-500 text-sm mb-3" role="alert">{loginError}</p>}
+                <button
+                  type="submit"
+                  tabIndex={0}
+                  className="w-full py-2 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                >
+                  {loginMode === 'login' ? 'Login' : 'Register'}
+                </button>
+              </form>
             </div>
           </div>
         </div>
