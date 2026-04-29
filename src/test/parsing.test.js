@@ -48,6 +48,24 @@ describe('parseTextIntoTokens', () => {
     expect(words[1].italic).toBe(true)
     expect(words[2].italic).toBe(false)
   })
+
+  it('excludes square-bracketed text from deletable words', () => {
+    const tokens = parseTextIntoTokens('Before [Form 3 these 15 lines] after')
+    const words = tokens.filter(t => t.type === 'word').map(t => t.value)
+    const protectedText = tokens.find(t => t.value === '[Form 3 these 15 lines]')
+
+    expect(words).toEqual(['Before', 'after'])
+    expect(protectedText).toEqual({ type: 'other', value: '[Form 3 these 15 lines]' })
+  })
+
+  it('excludes an initial header line separated by a blank line from deletable words', () => {
+    const tokens = parseTextIntoTokens('Hamlet Act 3, Scene 2\n\nSpeak the speech')
+    const words = tokens.filter(t => t.type === 'word')
+
+    expect(words.map(t => t.value)).toEqual(['Speak', 'the', 'speech'])
+    expect(words.map(t => t.wordIndex)).toEqual([0, 1, 2])
+    expect(tokens[0]).toEqual({ type: 'other', value: 'Hamlet Act 3, Scene 2\n\n' })
+  })
 })
 
 describe('removeOptionalSections', () => {

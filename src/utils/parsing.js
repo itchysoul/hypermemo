@@ -43,6 +43,19 @@ export function parseTextIntoTokens(text) {
   }
   
   cleanText = stripMarkdown(text)
+
+  const protectedRanges = []
+  const headerMatch = cleanText.match(/^[^\n]+\n{2,}/)
+  if (headerMatch) {
+    protectedRanges.push({ start: 0, end: headerMatch[0].length })
+  }
+
+  const bracketRegex = /\[[^\]]*\]/g
+  while ((match = bracketRegex.exec(cleanText)) !== null) {
+    protectedRanges.push({ start: match.index, end: match.index + match[0].length })
+  }
+
+  protectedRanges.sort((a, b) => a.start - b.start)
   
   const isInRange = (charIndex, ranges, originalText) => {
     let offset = 0
@@ -91,23 +104,41 @@ export function parseTextIntoTokens(text) {
   
   const tokenRegex = /([a-zA-Z]+(?:'[a-zA-Z]+)?)|([^a-zA-Z]+)/g
   let charIndex = 0
-  
-  while ((match = tokenRegex.exec(cleanText)) !== null) {
-    const startChar = match.index
-    if (match[1]) {
-      const style = getStyleAtPosition(startChar)
-      tokens.push({ 
-        type: 'word', 
-        value: match[1], 
-        wordIndex: wordIndex++,
-        bold: style.bold,
-        italic: style.italic
-      })
-    } else {
-      tokens.push({ type: 'other', value: match[2] })
+
+  const tokenizeDeletableText = (value, offset = 0) => {
+    tokenRegex.lastIndex = 0
+    while ((match = tokenRegex.exec(value)) !== null) {
+      const startChar = offset + match.index
+      if (match[1]) {
+        const style = getStyleAtPosition(startChar)
+        tokens.push({
+          type: 'word',
+          value: match[1],
+          wordIndex: wordIndex++,
+          bold: style.bold,
+          italic: style.italic
+        })
+      } else {
+        tokens.push({ type: 'other', value: match[2] })
+      }
     }
   }
-  
+
+  for (const range of protectedRanges) {
+    if (range.start > currentPos) {
+      tokenizeDeletableText(cleanText.slice(currentPos, range.start), currentPos)
+    }
+
+    if (range.end > currentPos) {
+      tokens.push({ type: 'other', value: cleanText.slice(Math.max(range.start, currentPos), range.end) })
+      currentPos = range.end
+    }
+  }
+
+  if (currentPos < cleanText.length) {
+    tokenizeDeletableText(cleanText.slice(currentPos), currentPos)
+  }
+
   return tokens
 }
 
