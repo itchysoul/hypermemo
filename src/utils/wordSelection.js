@@ -24,6 +24,10 @@ function seededRandom(seed) {
  */
 export function selectWordsToDelete(tokens, percentage, totalWords) {
   const wordTokens = tokens.filter(t => t.type === 'word')
+  if (percentage >= 100) {
+    return wordTokens.map(t => t.wordIndex).sort((a, b) => a - b)
+  }
+
   const count = Math.max(MIN_DELETED_WORDS, Math.round(totalWords * (percentage / 100)))
   const actualCount = Math.min(count, wordTokens.length)
   
@@ -49,13 +53,19 @@ export function selectWordsToDelete(tokens, percentage, totalWords) {
  */
 export function addMoreDeletions(tokens, currentIndices, targetCount) {
   const wordTokens = tokens.filter(t => t.type === 'word')
-  const currentSet = new Set(currentIndices)
-  const available = wordTokens.map(t => t.wordIndex).filter(i => !currentSet.has(i))
+  const validIndices = wordTokens.map(t => t.wordIndex)
+  if (targetCount >= validIndices.length) {
+    return validIndices.sort((a, b) => a - b)
+  }
+
+  const validSet = new Set(validIndices)
+  const currentSet = new Set(currentIndices.filter(i => validSet.has(i)))
+  const available = validIndices.filter(i => !currentSet.has(i))
   
-  const toAdd = Math.min(targetCount - currentIndices.length, available.length)
-  if (toAdd <= 0) return [...currentIndices]
+  const toAdd = Math.min(targetCount - currentSet.size, available.length)
+  if (toAdd <= 0) return [...currentSet].sort((a, b) => a - b)
   
-  const newIndices = [...currentIndices]
+  const newIndices = [...currentSet]
   
   for (let i = 0; i < toAdd && available.length > 0; i++) {
     const randomIndex = Math.floor(Math.random() * available.length)

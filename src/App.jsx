@@ -444,6 +444,22 @@ function App() {
   }, [tokens, totalWords, loading, deletionPercentage])
 
   useEffect(() => {
+    if (loading || deletionPercentage < 100 || tokens.length === 0) return
+
+    const currentWordIndices = tokens
+      .filter(t => t.type === 'word')
+      .map(t => t.wordIndex)
+    const deletedSet = new Set(deletedIndices)
+    const shouldNormalize =
+      deletedIndices.length !== currentWordIndices.length ||
+      currentWordIndices.some(index => !deletedSet.has(index))
+
+    if (shouldNormalize) {
+      setDeletedIndices(currentWordIndices)
+    }
+  }, [tokens, loading, deletionPercentage, deletedIndices])
+
+  useEffect(() => {
     if (loading) return
     
     const saveTimeout = setTimeout(async () => {

@@ -95,6 +95,20 @@ describe('addMoreDeletions', () => {
     const newIndices = addMoreDeletions(tokens, current, 3, 3)
     expect(newIndices).toEqual([0, 1, 2])
   })
+
+  it('returns every current word index when target reaches all words', () => {
+    const tokens = parseTextIntoTokens('Header text\n\none two [meta words] three')
+    const current = [0, 4, 99]
+    const newIndices = addMoreDeletions(tokens, current, 3)
+    expect(newIndices).toEqual([0, 1, 2])
+  })
+
+  it('fills missing current word indices when stale indices make the count look complete', () => {
+    const tokens = parseTextIntoTokens('one two three four')
+    const current = [0, 1, 99]
+    const newIndices = addMoreDeletions(tokens, current, 4)
+    expect(newIndices).toEqual([0, 1, 2, 3])
+  })
 })
 
 describe('removeDeletions', () => {
