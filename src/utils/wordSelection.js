@@ -4,7 +4,6 @@
 
 export const MIN_DELETED_WORDS = 2
 export const PERCENTAGE_STEP = 5
-export const VERSE_MODE_THRESHOLD = 50
 
 /**
  * Deterministic seeded random number generator

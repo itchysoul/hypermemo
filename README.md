@@ -7,7 +7,7 @@ A scripture memorization tool using cloze deletion with spaced repetition.
 - **Cloze Deletion**: Words are hidden and revealed on hover or cursor position
 - **Verse-at-a-Time Mode**: Practice one verse at a time with spaced repetition
 - **Vertical Cursor Reveal**: Words reveal as you move your cursor down and across the text
-- **Difficulty Adjustment**: Make passages harder or easier (auto-switches to verse mode at 50%)
+- **Difficulty Adjustment**: Make passages harder or easier, with verse-at-a-time mode available on demand
 - **User Accounts**: Save progress per user
 - **Spaced Repetition**: Short-term SRS for verse review during practice sessions
 

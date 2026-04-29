@@ -18,8 +18,7 @@ import {
   addMoreDeletions,
   removeDeletions,
   calculateMinPercentage,
-  PERCENTAGE_STEP,
-  VERSE_MODE_THRESHOLD
+  PERCENTAGE_STEP
 } from './utils/wordSelection'
 import {
   getNextInterval,
@@ -339,9 +338,7 @@ function App() {
             if (progressData.verse_progress) {
               setVerseProgress(progressData.verse_progress)
             }
-            if (progressData.deletion_percentage >= VERSE_MODE_THRESHOLD) {
-              setVerseMode(true)
-            }
+            setVerseMode(false)
           } else {
             setDeletionPercentage(PERCENTAGE_STEP)
             setVerseProgress({})
@@ -376,9 +373,7 @@ function App() {
             if (guestProgress.verse_progress) {
               setVerseProgress(guestProgress.verse_progress)
             }
-            if (guestProgress.deletion_percentage >= VERSE_MODE_THRESHOLD) {
-              setVerseMode(true)
-            }
+            setVerseMode(false)
           } else {
             setDeletionPercentage(PERCENTAGE_STEP)
             setVerseProgress({})
@@ -486,10 +481,6 @@ function App() {
     setDeletedIndices(newIndices)
     setShowAll(false)
     
-    if (newPercentage >= VERSE_MODE_THRESHOLD && !verseMode) {
-      setVerseMode(true)
-      setCurrentVerseIndex(0)
-    }
   }
 
   const handleEasier = useCallback(() => {
@@ -948,8 +939,8 @@ function App() {
               </button>
               <div className="absolute right-0 top-8 w-80 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                 <p className="font-bold mb-2">Welcome to hypermemo!</p>
-                <p className="mb-2">This should teach you some methods for memorizing starting with gaining familiarity (up to 50% cloze deletions). Pay attention to meaning and think through some association and hand actions during this phase.</p>
-                <p className="mb-2">After we reach 50% deletion, it will switch to verse-at-a-time method which will schedule and evaluate your reviews.</p>
+                <p className="mb-2">This should teach you some methods for memorizing by starting with gaining familiarity through cloze deletions. Pay attention to meaning and think through some association and hand actions during this phase.</p>
+                <p className="mb-2">When you want focused practice, turn on verse-at-a-time mode to schedule and evaluate your reviews.</p>
                 <p className="mb-2">Maximum intensity memorization is hard and it should feel hard. The number one rule is that if easy, you're doing it wrong.</p>
                 <p className="mb-2">At a certain point, you will do better to switch to paper.</p>
                 <p className="italic text-gray-400">-- Very much in beta!</p>
@@ -1134,7 +1125,7 @@ function App() {
             </label>
             {!verseMode && (
               <span className="text-xs text-gray-500">
-                Will switch to {selectedPassage?.type === 'poetry' ? 'couplet' : 'verse'} at a time mode at 50% hidden.
+                Turn this on when you want focused {selectedPassage?.type === 'poetry' ? 'couplet' : 'verse'} practice.
               </span>
             )}
             {verseMode && verses.length > 0 && (
